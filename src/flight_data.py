@@ -4,11 +4,69 @@ Core FlightData class - the central data model for flight simulation data.
 
 import numpy as np
 import scipy.io as sio
+import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Union
 
 from .utils.conversions import UnitConverter
+
+
+# Default variable mappings (used if no config file provided)
+DEFAULT_MAPPING = {
+    'position': {'north': 'N', 'east': 'E', 'down': 'D'},
+    'attitude': {'roll': 'phi', 'pitch': 'theta', 'yaw': 'psi'},
+    'controls': {'aileron': 'delta_a', 'elevator': 'delta_e', 'rudder': 'delta_r'},
+    'propulsion': {
+        'rpm_left': 'RPM_Cl', 'rpm_right': 'RPM_Cr',
+        'tilt_left': 'theta_Cl', 'tilt_right': 'theta_Cr'
+    },
+    'metadata': {'sample_rate': 'output_hz', 'duration': 'Time'},
+    'units': {
+        'position': 'meters', 'attitude': 'radians',
+        'controls': 'radians', 'propulsion_tilt': 'radians'
+    }
+}
+
+
+def load_mapping_config(config_path: Optional[Union[str, Path]] = None) -> Dict:
+    """
+    Load data mapping configuration from YAML file.
+
+    Args:
+        config_path: Path to data_mapping.yaml. If None, searches default locations.
+
+    Returns:
+        Dictionary with variable mappings
+    """
+    if config_path is None:
+        # Search default locations
+        search_paths = [
+            Path(__file__).parent.parent / 'config' / 'data_mapping.yaml',
+            Path.cwd() / 'config' / 'data_mapping.yaml',
+            Path.cwd() / 'data_mapping.yaml',
+        ]
+        for path in search_paths:
+            if path.exists():
+                config_path = path
+                break
+
+    if config_path is None or not Path(config_path).exists():
+        return DEFAULT_MAPPING.copy()
+
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    # Merge with defaults for any missing keys
+    merged = DEFAULT_MAPPING.copy()
+    for category in merged:
+        if category in config:
+            if isinstance(merged[category], dict):
+                merged[category].update(config[category])
+            else:
+                merged[category] = config[category]
+
+    return merged
 
 
 @dataclass
@@ -62,12 +120,15 @@ class FlightData:
     raw_data: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_mat_file(cls, filepath: str) -> 'FlightData':
+    def from_mat_file(cls, filepath: str,
+                      mapping_config: Optional[Union[str, Path, Dict]] = None) -> 'FlightData':
         """
         Load flight data from a MATLAB .mat file.
 
         Args:
             filepath: Path to the .mat file
+            mapping_config: Either a path to data_mapping.yaml, a dict with mappings,
+                           or None to use default/auto-detected config
 
         Returns:
             FlightData instance with loaded and processed data
@@ -76,6 +137,12 @@ class FlightData:
         if not path.exists():
             raise FileNotFoundError(f"MAT file not found: {filepath}")
 
+        # Load mapping configuration
+        if isinstance(mapping_config, dict):
+            mapping = mapping_config
+        else:
+            mapping = load_mapping_config(mapping_config)
+
         # Load raw data
         mat_data = sio.loadmat(str(path))
 
@@ -83,38 +150,64 @@ class FlightData:
         flight_data = cls()
         flight_data.source_file = str(path)
 
-        # Extract metadata
-        if 'output_hz' in mat_data:
-            flight_data.sample_rate = float(mat_data['output_hz'].flatten()[0])
-        if 'Time' in mat_data:
-            flight_data.duration = float(mat_data['Time'].flatten()[0])
-
-        # Helper to safely extract array
-        def get_array(key: str) -> np.ndarray:
-            if key in mat_data:
-                return mat_data[key].flatten().astype(np.float64)
+        # Helper to safely extract array using mapping
+        def get_array(mat_key: str) -> np.ndarray:
+            if mat_key in mat_data:
+                return mat_data[mat_key].flatten().astype(np.float64)
             return np.array([])
 
-        # Extract position
-        flight_data.N = get_array('N')
-        flight_data.E = get_array('E')
-        flight_data.D = get_array('D')
+        def get_scalar(mat_key: str, default: float = 0.0) -> float:
+            if mat_key in mat_data:
+                return float(mat_data[mat_key].flatten()[0])
+            return default
 
-        # Extract attitude (assumed to be in radians based on validation)
-        flight_data.phi = get_array('phi')
-        flight_data.theta = get_array('theta')
-        flight_data.psi = get_array('psi')
+        # Extract metadata using mapping
+        meta = mapping.get('metadata', {})
+        flight_data.sample_rate = get_scalar(meta.get('sample_rate', 'output_hz'), 10.0)
+        flight_data.duration = get_scalar(meta.get('duration', 'Time'), 0.0)
 
-        # Extract control surfaces
-        flight_data.delta_a = get_array('delta_a')
-        flight_data.delta_e = get_array('delta_e')
-        flight_data.delta_r = get_array('delta_r')
+        # Extract position using mapping
+        pos = mapping.get('position', {})
+        flight_data.N = get_array(pos.get('north', 'N'))
+        flight_data.E = get_array(pos.get('east', 'E'))
+        flight_data.D = get_array(pos.get('down', 'D'))
 
-        # Extract propulsion
-        flight_data.RPM_Cl = get_array('RPM_Cl')
-        flight_data.RPM_Cr = get_array('RPM_Cr')
-        flight_data.theta_Cl = get_array('theta_Cl')
-        flight_data.theta_Cr = get_array('theta_Cr')
+        # Extract attitude using mapping
+        att = mapping.get('attitude', {})
+        flight_data.phi = get_array(att.get('roll', 'phi'))
+        flight_data.theta = get_array(att.get('pitch', 'theta'))
+        flight_data.psi = get_array(att.get('yaw', 'psi'))
+
+        # Convert attitude to radians if needed
+        units = mapping.get('units', {})
+        if units.get('attitude', 'radians') == 'degrees':
+            flight_data.phi = np.radians(flight_data.phi)
+            flight_data.theta = np.radians(flight_data.theta)
+            flight_data.psi = np.radians(flight_data.psi)
+
+        # Extract control surfaces using mapping
+        ctrl = mapping.get('controls', {})
+        flight_data.delta_a = get_array(ctrl.get('aileron', 'delta_a'))
+        flight_data.delta_e = get_array(ctrl.get('elevator', 'delta_e'))
+        flight_data.delta_r = get_array(ctrl.get('rudder', 'delta_r'))
+
+        # Convert controls to radians if needed
+        if units.get('controls', 'radians') == 'degrees':
+            flight_data.delta_a = np.radians(flight_data.delta_a)
+            flight_data.delta_e = np.radians(flight_data.delta_e)
+            flight_data.delta_r = np.radians(flight_data.delta_r)
+
+        # Extract propulsion using mapping
+        prop = mapping.get('propulsion', {})
+        flight_data.RPM_Cl = get_array(prop.get('rpm_left', 'RPM_Cl'))
+        flight_data.RPM_Cr = get_array(prop.get('rpm_right', 'RPM_Cr'))
+        flight_data.theta_Cl = get_array(prop.get('tilt_left', 'theta_Cl'))
+        flight_data.theta_Cr = get_array(prop.get('tilt_right', 'theta_Cr'))
+
+        # Convert propulsion tilt to radians if needed
+        if units.get('propulsion_tilt', 'radians') == 'degrees':
+            flight_data.theta_Cl = np.radians(flight_data.theta_Cl)
+            flight_data.theta_Cr = np.radians(flight_data.theta_Cr)
 
         # Set sample count
         flight_data.n_samples = len(flight_data.N)

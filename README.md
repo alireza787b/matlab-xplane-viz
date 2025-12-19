@@ -1,8 +1,9 @@
 # VTOL Flight Simulation Visualization
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Professional-grade Python visualization system for VTOL (Vertical Take-Off and Landing) aircraft flight simulation data. Designed to process MATLAB/Simulink simulation outputs and generate publication-quality plots, 3D visualizations, and animations.
+Professional-grade Python visualization system for VTOL (Vertical Take-Off and Landing) aircraft flight simulation data. Designed to process MATLAB/Simulink simulation outputs and generate publication-quality plots, 3D visualizations, animations, and real-time X-Plane playback.
 
 ![Dashboard Example](docs/images/dashboard_preview.png)
 
@@ -16,7 +17,8 @@ Professional-grade Python visualization system for VTOL (Vertical Take-Off and L
 - **Dashboard View**: Single-page summary with all key flight metrics
 - **Configurable Styling**: YAML-based themes for publication-quality output
 - **Session Management**: Organize multiple simulation runs cleanly
-- **X-Plane Ready**: Designed for future X-Plane UDP integration
+- **X-Plane Integration**: Real-time flight playback in X-Plane simulator
+- **Configurable Mappings**: YAML-based variable mapping for any data format
 
 ## Quick Start
 
@@ -24,8 +26,8 @@ Professional-grade Python visualization system for VTOL (Vertical Take-Off and L
 
 ```bash
 # Clone the repository
-git clone https://github.com/alireza787b/vtol-flight-viz.git
-cd vtol-flight-viz
+git clone https://github.com/alireza787b/matlab-xplane-viz.git
+cd matlab-xplane-viz
 
 # Create virtual environment
 python3 -m venv venv
@@ -51,12 +53,27 @@ python run_analysis.py --list-sessions
 python run_analysis.py --mat-file path/to/data.mat --output-dir ./output
 ```
 
+### X-Plane Playback
+
+```bash
+# Play flight data in X-Plane
+python run_analysis.py --session session_001 --xplane-play
+
+# With speed multiplier
+python run_analysis.py --session session_001 --xplane-play --xplane-speed 2.0
+
+# Using standalone script
+python scripts/xplane_playback.py path/to/data.mat --speed 1.5 --loop
+```
+
 ## Project Structure
 
 ```
-vtol-flight-viz/
+matlab-xplane-viz/
 ├── config/
-│   ├── default.yaml              # Default plot styling and colors
+│   ├── default.yaml              # Plot styling and colors
+│   ├── data_mapping.yaml         # MAT file variable mappings
+│   ├── xplane.yaml               # X-Plane connection settings
 │   └── aircraft/
 │       └── vtol_default.yaml     # Aircraft geometry configuration
 ├── src/
@@ -66,25 +83,38 @@ vtol-flight-viz/
 │   │   └── rotations.py          # Rotation matrices, 3D transforms
 │   ├── styles/
 │   │   └── themes.py             # Plot styling system
-│   └── plotters/
-│       ├── base.py               # Base plotter class
-│       ├── time_history.py       # Time series plots
-│       ├── trajectory.py         # 2D/3D trajectory plots
-│       ├── controls.py           # Control surface plots
-│       ├── aircraft_3d.py        # 3D aircraft visualization
-│       └── dashboard.py          # Summary dashboard
+│   ├── plotters/
+│   │   ├── base.py               # Base plotter class
+│   │   ├── time_history.py       # Time series plots
+│   │   ├── trajectory.py         # 2D/3D trajectory plots
+│   │   ├── controls.py           # Control surface plots
+│   │   ├── aircraft_3d.py        # 3D aircraft visualization
+│   │   └── dashboard.py          # Summary dashboard
+│   └── xplane/                    # X-Plane integration module
+│       ├── player.py             # XPlanePlayer class
+│       ├── coordinate_utils.py   # NED to Lat/Lon conversion
+│       └── backends/             # Communication backends
+│           ├── xpc_backend.py    # NASA XPlaneConnect
+│           └── udp_backend.py    # Native X-Plane UDP
+├── scripts/
+│   └── xplane_playback.py        # Standalone X-Plane playback script
 ├── sessions/                      # Simulation data organized by session
 │   └── session_001/
 │       ├── raw_data/             # Original .mat files
 │       └── plots/                # Generated visualizations
 ├── docs/                          # Documentation
+│   └── guides/
+│       ├── getting-started.md    # Getting started guide
+│       ├── data-format.md        # Data format specification
+│       ├── xplane-setup.md       # X-Plane integration guide
+│       └── configuration.md      # Configuration reference
 ├── requirements.txt
 └── run_analysis.py               # Main CLI entry point
 ```
 
 ## Input Data Format
 
-The system expects MATLAB `.mat` files with the following variables:
+The system expects MATLAB `.mat` files with the following variables (default mapping):
 
 | Variable | Description | Units |
 |----------|-------------|-------|
@@ -95,6 +125,17 @@ The system expects MATLAB `.mat` files with the following variables:
 | `theta_Cl`, `theta_Cr` | Propeller tilt angles | degrees |
 | `Time` | Simulation duration | seconds |
 | `output_hz` | Sample rate | Hz |
+
+**Custom Variable Names:** Edit `config/data_mapping.yaml` to use YOUR variable names:
+
+```yaml
+position:
+  north: "x_pos"    # Your variable for North position
+  east: "y_pos"
+  down: "z_pos"
+```
+
+See [Data Format Guide](docs/guides/data-format.md) for details.
 
 ## Generated Outputs
 
@@ -212,10 +253,42 @@ fig = plotter.plot_attitude()
 fig.savefig('attitude.png')
 ```
 
+## X-Plane Integration
+
+Play back flight simulation data in X-Plane with full position, attitude, control surface, and propulsion visualization.
+
+### Backends
+
+| Backend | Plugin Required | Best For |
+|---------|-----------------|----------|
+| `auto` | Tries both | General use |
+| `xpc` | Yes ([XPlaneConnect](https://github.com/nasa/XPlaneConnect)) | Best API |
+| `native` | No | No setup |
+
+### Quick Example
+
+```python
+from src.xplane import XPlanePlayer
+
+with XPlanePlayer() as player:
+    player.load("path/to/data.mat")
+    player.play(speed=1.5)
+```
+
+See [X-Plane Setup Guide](docs/guides/xplane-setup.md) for complete documentation.
+
+## Documentation
+
+- [Getting Started](docs/guides/getting-started.md) - Installation and first analysis
+- [Data Format Guide](docs/guides/data-format.md) - MAT file requirements
+- [X-Plane Setup](docs/guides/xplane-setup.md) - X-Plane integration guide
+- [Configuration Guide](docs/guides/configuration.md) - All configuration options
+
 ## Future Roadmap
 
-- [ ] **X-Plane Integration**: Real-time visualization via UDP protocol
-- [ ] **Flight Replay**: Animate simulation in X-Plane
+- [x] **X-Plane Integration**: Real-time visualization via UDP protocol
+- [x] **Flight Replay**: Animate simulation in X-Plane
+- [x] **Configurable Data Mapping**: Support any MAT file format
 - [ ] **Comparison Tools**: Overlay multiple flights for analysis
 - [ ] **KML Export**: Google Earth visualization
 - [ ] **Report Generation**: PDF reports with analysis

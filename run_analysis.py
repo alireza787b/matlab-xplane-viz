@@ -6,6 +6,7 @@ Usage:
     python run_analysis.py --session session_001
     python run_analysis.py --mat-file path/to/file.mat --output-dir path/to/output
     python run_analysis.py --session session_001 --animate
+    python run_analysis.py --session session_001 --xplane-play
 """
 
 import sys
@@ -26,6 +27,98 @@ from src.plotters import (
     Aircraft3DPlotter,
     DashboardPlotter
 )
+
+
+def run_xplane_playback(
+    flight_data: FlightData,
+    speed: float = 1.0,
+    host: str = "localhost",
+    backend: str = "auto",
+    origin: str = None,
+    loop: bool = False
+) -> int:
+    """
+    Play flight data in X-Plane.
+
+    Args:
+        flight_data: Loaded FlightData instance
+        speed: Playback speed factor
+        host: X-Plane host address
+        backend: Backend to use (auto/xpc/native)
+        origin: Origin as "lat,lon,alt" string
+        loop: Loop playback
+
+    Returns:
+        0 on success, 1 on failure
+    """
+    try:
+        from src.xplane import XPlanePlayer
+        from src.xplane.player import PlaybackConfig
+    except ImportError as e:
+        print(f"Error: X-Plane module not available: {e}")
+        return 1
+
+    # Create config
+    config = PlaybackConfig(
+        host=host,
+        backend=backend,
+        default_speed=speed,
+        loop=loop
+    )
+
+    # Parse origin if provided
+    if origin:
+        try:
+            parts = origin.split(',')
+            config.auto_origin = False
+            config.origin_lat = float(parts[0])
+            config.origin_lon = float(parts[1])
+            config.origin_alt = float(parts[2]) if len(parts) > 2 else 0.0
+        except (ValueError, IndexError):
+            print(f"Error: Invalid origin format. Use: lat,lon[,alt]")
+            return 1
+
+    # Create player
+    player = XPlanePlayer(config)
+
+    # Load data
+    if not player.load(flight_data):
+        print("Error: Failed to load flight data for playback")
+        return 1
+
+    # Connect
+    print(f"Connecting to X-Plane at {host}...")
+    if not player.connect():
+        print("Error: Failed to connect to X-Plane")
+        print("\nTroubleshooting:")
+        print("  1. Ensure X-Plane is running")
+        print("  2. For XPC backend: Install XPlaneConnect plugin")
+        print("  3. Try --xplane-backend native if XPC fails")
+        return 1
+
+    import time
+
+    def on_frame(frame_idx: int, time_sec: float):
+        if frame_idx % 10 == 0:
+            progress = player.progress * 100
+            print(f"\rPlayback: {time_sec:.1f}s / {player.total_time:.1f}s ({progress:.1f}%)", end='', flush=True)
+
+    player.on_frame(on_frame)
+
+    print(f"\nStarting playback at {speed}x speed...")
+    print("Press Ctrl+C to stop\n")
+
+    try:
+        player.play(speed=speed)
+        while player.is_playing or player.is_paused:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("\n\nStopping playback...")
+        player.stop()
+
+    player.disconnect()
+    print("\nPlayback complete!")
+    return 0
 
 
 def find_mat_files(session_path: Path) -> list:
@@ -304,6 +397,47 @@ Examples:
         help='Do not clean existing plots before generating new ones'
     )
 
+    # X-Plane playback arguments
+    parser.add_argument(
+        '--xplane-play', '-x',
+        action='store_true',
+        help='Play flight data in X-Plane instead of generating plots'
+    )
+
+    parser.add_argument(
+        '--xplane-speed',
+        type=float,
+        default=1.0,
+        help='X-Plane playback speed factor (default: 1.0)'
+    )
+
+    parser.add_argument(
+        '--xplane-host',
+        type=str,
+        default='localhost',
+        help='X-Plane host address (default: localhost)'
+    )
+
+    parser.add_argument(
+        '--xplane-backend',
+        choices=['auto', 'xpc', 'native'],
+        default='auto',
+        help='X-Plane communication backend (default: auto)'
+    )
+
+    parser.add_argument(
+        '--xplane-origin',
+        type=str,
+        default=None,
+        help='X-Plane origin as lat,lon,alt (default: auto-detect)'
+    )
+
+    parser.add_argument(
+        '--xplane-loop',
+        action='store_true',
+        help='Loop X-Plane playback continuously'
+    )
+
     args = parser.parse_args()
 
     # Get project root
@@ -364,6 +498,17 @@ Examples:
     except Exception as e:
         print(f"Error loading MAT file: {e}")
         return 1
+
+    # X-Plane playback mode
+    if args.xplane_play:
+        return run_xplane_playback(
+            flight_data=flight_data,
+            speed=args.xplane_speed,
+            host=args.xplane_host,
+            backend=args.xplane_backend,
+            origin=args.xplane_origin,
+            loop=args.xplane_loop
+        )
 
     # Generate plots
     try:

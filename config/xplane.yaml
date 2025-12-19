@@ -1,0 +1,133 @@
+# X-Plane Integration Configuration
+# =================================
+# Settings for flight data playback in X-Plane
+
+connection:
+  # X-Plane host address (use IP for remote)
+  host: localhost
+
+  # XPlaneConnect plugin port (default: 49009)
+  port: 49009
+
+  # Native X-Plane UDP port (default: 49000)
+  native_port: 49000
+
+  # Backend selection:
+  #   auto   - Try XPC first, fall back to native UDP
+  #   xpc    - Use NASA XPlaneConnect (requires plugin)
+  #   native - Use native X-Plane UDP (no plugin needed)
+  backend: auto
+
+  # Connection timeout in milliseconds
+  timeout: 1000
+
+playback:
+  # Default playback speed (1.0 = real-time)
+  default_speed: 1.0
+
+  # Loop playback when reaching end
+  loop: false
+
+  # Show status messages in X-Plane
+  show_status: true
+
+origin:
+  # Auto-detect origin from current X-Plane aircraft position
+  auto_detect: true
+
+  # Manual origin (used when auto_detect is false)
+  # latitude: 37.5242
+  # longitude: -122.0690
+  # altitude: 100
+
+controls:
+  # Maximum deflection angles for normalization (degrees)
+  # Used to convert simulation data to X-Plane normalized [-1, 1] range
+  aileron_max_deg: 30.0
+  elevator_max_deg: 30.0
+  rudder_max_deg: 30.0
+
+features:
+  # Which data to send to X-Plane
+  position: true
+  attitude: true
+  controls: true
+  propulsion: true
+
+# Variable to X-Plane Dataref Mapping
+# ====================================
+# Defines how simulation variables map to X-Plane datarefs
+# Edit this to match your X-Plane aircraft model
+
+variable_mapping:
+  # Position configuration
+  position:
+    source_frame: "ned"  # ned (North-East-Down), lla (Lat-Lon-Alt), ecef
+
+  # Attitude configuration
+  attitude:
+    source_unit: "radians"  # radians or degrees
+
+  # Control surfaces
+  controls:
+    aileron:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/controls/wing1l_ail1def"
+      target_unit: "degrees"
+      max_deflection: 30.0  # for normalization
+      inverted: false
+
+    elevator:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/controls/hstab1_elv1def"
+      target_unit: "degrees"
+      max_deflection: 30.0
+      inverted: false
+
+    rudder:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/controls/vstab1_rud1def"
+      target_unit: "degrees"
+      max_deflection: 30.0
+      inverted: false
+
+  # Propulsion system (VTOL tilt-rotor example)
+  propulsion:
+    rpm_left:
+      target_dref: "sim/flightmodel/engine/ENGN_N1_[0]"
+      max_value: 10000  # RPM for normalization to N1 percentage
+      scale: 0.01       # Convert RPM to % (RPM/100)
+
+    rpm_right:
+      target_dref: "sim/flightmodel/engine/ENGN_N1_[1]"
+      max_value: 10000
+      scale: 0.01
+
+    tilt_left:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/engine/POINT_pitch[0]"
+      target_unit: "degrees"
+
+    tilt_right:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/engine/POINT_pitch[1]"
+      target_unit: "degrees"
+
+# Common X-Plane Datarefs Reference
+# =================================
+# Control surfaces (deflection in degrees):
+#   sim/flightmodel/controls/wing1l_ail1def  - Left aileron
+#   sim/flightmodel/controls/wing1r_ail1def  - Right aileron
+#   sim/flightmodel/controls/hstab1_elv1def  - Left elevator
+#   sim/flightmodel/controls/hstab2_elv1def  - Right elevator
+#   sim/flightmodel/controls/vstab1_rud1def  - Rudder
+#
+# Engine parameters:
+#   sim/flightmodel/engine/ENGN_thro[n]      - Throttle [0-1]
+#   sim/flightmodel/engine/ENGN_N1_[n]       - N1 percentage
+#   sim/flightmodel/engine/ENGN_N2_[n]       - N2 percentage
+#   sim/flightmodel/engine/POINT_pitch[n]    - Engine pitch/tilt
+#
+# Override datarefs:
+#   sim/operation/override/override_planepath - Override aircraft position
+#   sim/time/sim_speed                        - Simulation speed

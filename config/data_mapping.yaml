@@ -1,0 +1,54 @@
+# MAT File Variable Mappings
+# ==========================
+# This file defines how variables in your .mat file map to internal variable names.
+# Edit this file to match YOUR .mat file's variable naming convention.
+#
+# Format: internal_name: "mat_file_variable_name"
+#
+# Example: If your .mat file uses 'x_pos' instead of 'N' for north position:
+#   position:
+#     north: "x_pos"
+
+# Position variables (NED frame - North, East, Down)
+position:
+  north: "N"              # North position [meters]
+  east: "E"               # East position [meters]
+  down: "D"               # Down position [meters] (positive = below origin)
+
+# Attitude variables (Euler angles)
+attitude:
+  roll: "phi"             # Roll angle (bank) [radians]
+  pitch: "theta"          # Pitch angle [radians]
+  yaw: "psi"              # Yaw/Heading angle [radians]
+
+# Control surface deflections
+controls:
+  aileron: "delta_a"      # Aileron deflection [radians]
+  elevator: "delta_e"     # Elevator deflection [radians]
+  rudder: "delta_r"       # Rudder deflection [radians]
+
+# Propulsion system (VTOL-specific)
+propulsion:
+  rpm_left: "RPM_Cl"      # Left cruise propeller RPM
+  rpm_right: "RPM_Cr"     # Right cruise propeller RPM
+  tilt_left: "theta_Cl"   # Left propeller tilt angle [radians]
+  tilt_right: "theta_Cr"  # Right propeller tilt angle [radians]
+
+# Metadata
+metadata:
+  sample_rate: "output_hz"  # Data sample rate [Hz]
+  duration: "Time"          # Total simulation duration [seconds]
+
+# Unit specifications
+# These define the units used in your .mat file (for automatic conversion)
+units:
+  position: "meters"        # meters, feet
+  attitude: "radians"       # radians, degrees
+  controls: "radians"       # radians, degrees
+  propulsion_rpm: "rpm"     # rpm
+  propulsion_tilt: "radians"  # radians, degrees
+
+# Optional: Additional custom variables
+# Add any extra variables from your .mat file here
+# custom:
+#   my_variable: "mat_var_name"

@@ -13,8 +13,8 @@ This guide will walk you through setting up and using the VTOL Flight Simulation
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/alireza787b/vtol-flight-viz.git
-cd vtol-flight-viz
+git clone https://github.com/alireza787b/matlab-xplane-viz.git
+cd matlab-xplane-viz
 ```
 
 ### 2. Create Virtual Environment
@@ -125,6 +125,38 @@ Edit `config/default.yaml` to change:
 - Font sizes
 - Grid styling
 
+## X-Plane Playback (Optional)
+
+If you want to visualize your flight in X-Plane flight simulator:
+
+### Quick Start
+
+```bash
+# Ensure X-Plane is running, then:
+python run_analysis.py --session session_001 --xplane-play
+```
+
+### X-Plane Requirements
+
+- X-Plane 11 or 12 installed and running
+- Position aircraft at desired starting location
+- (Optional) Install [XPlaneConnect plugin](https://github.com/nasa/XPlaneConnect) for best results
+
+### Playback Options
+
+```bash
+# Double speed
+python run_analysis.py --session session_001 --xplane-play --xplane-speed 2.0
+
+# Use native UDP (no plugin needed)
+python run_analysis.py --session session_001 --xplane-play --xplane-backend native
+
+# Loop continuously
+python run_analysis.py --session session_001 --xplane-play --xplane-loop
+```
+
+See [X-Plane Setup Guide](xplane-setup.md) for complete documentation.
+
 ## Common Issues
 
 ### "No MAT files found"
@@ -139,8 +171,13 @@ source venv/bin/activate
 ### Plots not updating
 By default, existing plots are cleaned before regenerating. If plots aren't updating, check file permissions.
 
+### X-Plane connection failed
+1. Ensure X-Plane is running before starting playback
+2. Try `--xplane-backend native` if XPC plugin isn't installed
+3. Check firewall settings for remote connections
+
 ## Next Steps
 
-- Read the [Data Format Guide](data-format.md) to understand input requirements
-- Check [Customization Guide](customization.md) for advanced styling
-- See [API Reference](api-reference.md) for programmatic usage
+- [Data Format Guide](data-format.md) - Understand input requirements
+- [X-Plane Setup Guide](xplane-setup.md) - Full X-Plane integration details
+- [Configuration Guide](configuration.md) - All configuration options
