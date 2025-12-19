@@ -1,7 +1,6 @@
 # VTOL Flight Simulation Visualization
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Professional-grade Python visualization system for VTOL (Vertical Take-Off and Landing) aircraft flight simulation data. Designed to process MATLAB/Simulink simulation outputs and generate publication-quality plots, 3D visualizations, and animations.
 
@@ -235,10 +234,6 @@ See `requirements.txt` for complete list.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Author
 
