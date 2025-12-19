@@ -1,0 +1,68 @@
+# VTOL Aircraft Geometry Configuration
+
+# Aircraft type
+type: VTOL
+name: Generic VTOL
+
+# Geometric dimensions (meters)
+geometry:
+  # Fuselage
+  fuselage:
+    length: 8.0
+    width: 1.2
+    height: 1.0
+
+  # Main wing
+  wing:
+    span: 10.0
+    chord: 1.5
+    position_x: 0.0  # Relative to CG
+
+  # Horizontal tail
+  horizontal_tail:
+    span: 3.0
+    chord: 0.8
+    position_x: -3.5
+
+  # Vertical tail
+  vertical_tail:
+    height: 1.2
+    chord: 0.8
+    position_x: -3.5
+
+  # Propulsion
+  propellers:
+    cruise:
+      count: 2
+      positions:
+        left: [0.0, -2.5, 0.0]   # [x, y, z] in body frame
+        right: [0.0, 2.5, 0.0]
+      diameter: 1.5
+      tiltable: true
+
+    lift:
+      count: 0  # Set to 4+ for quad-style VTOL
+      positions: []
+      diameter: 0.8
+
+# Mass properties (optional, for future use)
+mass:
+  total_kg: 500
+  cg_position: [0.0, 0.0, 0.0]
+
+# Aerodynamic limits (for envelope display)
+limits:
+  control_surfaces:
+    aileron_max_deg: 30
+    elevator_max_deg: 30
+    rudder_max_deg: 30
+
+  attitude:
+    max_roll_deg: 60
+    max_pitch_deg: 30
+
+  propulsion:
+    rpm_min: 0
+    rpm_max: 8000
+    tilt_min_deg: 0
+    tilt_max_deg: 90

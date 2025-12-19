@@ -1,0 +1,113 @@
+# VTOL Flight Simulation Visualization - Default Configuration
+
+# Plot settings
+plot:
+  dpi: 300
+  format: png
+
+  # Figure sizes (inches)
+  figure_sizes:
+    single: [10, 6]
+    multi_panel: [12, 10]
+    dashboard: [16, 12]
+    trajectory_3d: [12, 10]
+    animation_frame: [10, 8]
+
+  # Font settings
+  fonts:
+    family: DejaVu Sans
+    title_size: 14
+    label_size: 12
+    tick_size: 10
+    legend_size: 10
+
+  # Grid settings
+  grid:
+    visible: true
+    alpha: 0.3
+    linestyle: '--'
+    color: '#888888'
+
+  # Line settings
+  line_width:
+    main: 1.5
+    secondary: 1.0
+    reference: 0.8
+
+# Color schemes by variable category
+colors:
+  # Position variables (blues)
+  position:
+    N: '#1f77b4'      # Dark blue
+    E: '#4a9fd4'      # Medium blue
+    D: '#7ec8e3'      # Light blue
+    altitude: '#1f77b4'
+
+  # Attitude variables (reds/oranges)
+  attitude:
+    phi: '#d62728'    # Red (roll)
+    theta: '#ff7f0e'  # Orange (pitch)
+    psi: '#9467bd'    # Purple (yaw)
+
+  # Control surfaces (greens)
+  controls:
+    delta_a: '#2ca02c'  # Green (aileron)
+    delta_e: '#17becf'  # Cyan (elevator)
+    delta_r: '#bcbd22'  # Yellow-green (rudder)
+
+  # Propulsion (purples)
+  propulsion:
+    RPM: '#9467bd'
+    tilt: '#e377c2'
+
+  # Velocity (teals)
+  velocity:
+    V_ground: '#17becf'
+    V_total: '#1f77b4'
+    climb_rate: '#2ca02c'
+
+  # 3D visualization
+  aircraft:
+    fuselage: '#4a90d9'
+    wings: '#6ab7ff'
+    tail: '#3d7ab8'
+
+  # Trajectory
+  trajectory:
+    path: '#1f77b4'
+    start: '#2ca02c'
+    end: '#d62728'
+
+# Unit display preferences
+units:
+  distance: m          # m, ft, km, nm
+  speed: m/s           # m/s, knots, km/h
+  altitude: m          # m, ft
+  angle: deg           # deg, rad
+  climb_rate: m/s      # m/s, fpm
+
+# Animation settings
+animation:
+  fps: 30
+  duration_factor: 1.0   # 1.0 = real-time, 0.5 = 2x speed
+  trail_length: 50       # Number of past positions to show
+  aircraft_scale: 100    # Scale factor for aircraft model
+  output_format: gif     # gif or mp4
+
+# 3D aircraft model
+aircraft:
+  wingspan: 10.0         # meters
+  fuselage_length: 8.0   # meters
+  tail_span: 3.0         # meters
+  visualization_scale: 50.0  # Scale for 3D plots
+
+# Session settings
+session:
+  auto_save_plots: true
+  plot_subdirectories:
+    - time_histories
+    - trajectory
+    - controls
+    - 3d_aircraft
+    - animations
+    - summary
