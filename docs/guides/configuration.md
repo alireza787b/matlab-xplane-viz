@@ -143,26 +143,67 @@ features:
   propulsion: true  # Send RPM/tilt data
 ```
 
-### Variable Mapping
+### Variable Mapping (Key Feature)
 
-Maps simulation variables to X-Plane datarefs:
+Maps simulation variables to X-Plane datarefs. This section allows you to target **any** X-Plane aircraft without code changes.
 
 ```yaml
 variable_mapping:
+  # Position configuration
+  position:
+    source_frame: "ned"  # ned (North-East-Down), lla (Lat-Lon-Alt), ecef
+
+  # Attitude configuration
+  attitude:
+    source_unit: "radians"  # radians or degrees
+
+  # Control surfaces - customize datarefs for your aircraft
   controls:
     aileron:
       source_unit: "radians"
-      target_dref: "sim/flightmodel/controls/wing1l_ail1def"
+      target_dref: "sim/flightmodel/controls/wing1l_ail1def"  # Change for your aircraft
+      target_unit: "degrees"
+      max_deflection: 30.0
+      inverted: false   # Set true if control moves wrong direction
+
+    elevator:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/controls/hstab1_elv1def"
       target_unit: "degrees"
       max_deflection: 30.0
       inverted: false
 
+    rudder:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/controls/vstab1_rud1def"
+      target_unit: "degrees"
+      max_deflection: 30.0
+      inverted: false
+
+  # Propulsion system - configure for your aircraft type
   propulsion:
     rpm_left:
       target_dref: "sim/flightmodel/engine/ENGN_N1_[0]"
+      max_value: 10000   # Your simulation's max RPM
+      scale: 0.01        # Converts RPM to N1 percentage
+
+    rpm_right:
+      target_dref: "sim/flightmodel/engine/ENGN_N1_[1]"
       max_value: 10000
       scale: 0.01
+
+    tilt_left:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/engine/POINT_pitch[0]"
+      target_unit: "degrees"
+
+    tilt_right:
+      source_unit: "radians"
+      target_dref: "sim/flightmodel/engine/POINT_pitch[1]"
+      target_unit: "degrees"
 ```
+
+See [Custom Aircraft Guide](custom-aircraft.md) for detailed examples of mapping to different aircraft types.
 
 ---
 

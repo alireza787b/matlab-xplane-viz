@@ -66,7 +66,7 @@ class NativeUDPBackend(XPlaneBackend):
             try:
                 # Release physics override before disconnecting
                 self.override_physics(False)
-            except:
+            except Exception:
                 pass
             self._socket.close()
             self._socket = None

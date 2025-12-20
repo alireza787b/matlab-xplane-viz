@@ -11,7 +11,7 @@ import threading
 from enum import Enum, auto
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Callable, Dict, Any, Union
+from typing import Optional, Callable, Dict, Any, Union, List
 import yaml
 import numpy as np
 
@@ -36,6 +36,115 @@ class PlaybackState(Enum):
     PAUSED = auto()
 
 
+# =============================================================================
+# Dataref Mapping Configuration Classes
+# =============================================================================
+
+@dataclass
+class ControlMapping:
+    """Configuration for a single control surface dataref."""
+    target_dref: str
+    source_unit: str = "radians"
+    target_unit: str = "degrees"
+    max_deflection: float = 30.0
+    inverted: bool = False
+
+
+@dataclass
+class PropulsionMapping:
+    """Configuration for a propulsion-related dataref."""
+    target_dref: str
+    max_value: float = 10000.0
+    scale: float = 0.01
+    source_unit: str = "radians"
+    target_unit: str = "degrees"
+
+
+@dataclass
+class DatarefConfig:
+    """
+    Complete configuration for X-Plane dataref mappings.
+
+    Loaded from config/xplane.yaml's variable_mapping section.
+    Allows users to customize which datarefs are used without code changes.
+    """
+    # Control surface mappings
+    aileron: Optional[ControlMapping] = None
+    elevator: Optional[ControlMapping] = None
+    rudder: Optional[ControlMapping] = None
+
+    # Propulsion mappings
+    rpm_left: Optional[PropulsionMapping] = None
+    rpm_right: Optional[PropulsionMapping] = None
+    tilt_left: Optional[PropulsionMapping] = None
+    tilt_right: Optional[PropulsionMapping] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'DatarefConfig':
+        """Create DatarefConfig from a dictionary (loaded from YAML)."""
+        config = cls()
+
+        # Parse control surface mappings
+        controls = data.get('controls', {})
+        if 'aileron' in controls:
+            config.aileron = ControlMapping(**controls['aileron'])
+        if 'elevator' in controls:
+            config.elevator = ControlMapping(**controls['elevator'])
+        if 'rudder' in controls:
+            config.rudder = ControlMapping(**controls['rudder'])
+
+        # Parse propulsion mappings
+        propulsion = data.get('propulsion', {})
+        if 'rpm_left' in propulsion:
+            config.rpm_left = PropulsionMapping(**propulsion['rpm_left'])
+        if 'rpm_right' in propulsion:
+            config.rpm_right = PropulsionMapping(**propulsion['rpm_right'])
+        if 'tilt_left' in propulsion:
+            config.tilt_left = PropulsionMapping(**propulsion['tilt_left'])
+        if 'tilt_right' in propulsion:
+            config.tilt_right = PropulsionMapping(**propulsion['tilt_right'])
+
+        return config
+
+    @classmethod
+    def defaults(cls) -> 'DatarefConfig':
+        """Return default dataref configuration."""
+        return cls(
+            aileron=ControlMapping(
+                target_dref="sim/flightmodel/controls/wing1l_ail1def",
+                max_deflection=30.0
+            ),
+            elevator=ControlMapping(
+                target_dref="sim/flightmodel/controls/hstab1_elv1def",
+                max_deflection=30.0
+            ),
+            rudder=ControlMapping(
+                target_dref="sim/flightmodel/controls/vstab1_rud1def",
+                max_deflection=30.0
+            ),
+            rpm_left=PropulsionMapping(
+                target_dref="sim/flightmodel/engine/ENGN_N1_[0]",
+                max_value=10000.0,
+                scale=0.01
+            ),
+            rpm_right=PropulsionMapping(
+                target_dref="sim/flightmodel/engine/ENGN_N1_[1]",
+                max_value=10000.0,
+                scale=0.01
+            ),
+            tilt_left=PropulsionMapping(
+                target_dref="sim/flightmodel/engine/POINT_pitch[0]",
+                source_unit="radians",
+                target_unit="degrees"
+            ),
+            tilt_right=PropulsionMapping(
+                target_dref="sim/flightmodel/engine/POINT_pitch[1]",
+                source_unit="radians",
+                target_unit="degrees"
+            ),
+        )
+
+
 @dataclass
 class PlaybackConfig:
     """Configuration for flight data playback."""
@@ -58,6 +167,7 @@ class PlaybackConfig:
     origin_alt: float = 0.0
 
     # Control surface settings (max deflection for normalization)
+    # Note: These are DEPRECATED - use dataref_config instead
     aileron_max_deg: float = 30.0
     elevator_max_deg: float = 30.0
     rudder_max_deg: float = 30.0
@@ -67,6 +177,9 @@ class PlaybackConfig:
     send_attitude: bool = True
     send_controls: bool = True
     send_propulsion: bool = True
+
+    # Dataref mapping configuration (loaded from variable_mapping in YAML)
+    dataref_config: Optional[DatarefConfig] = None
 
     @classmethod
     def from_yaml(cls, path: Union[str, Path]) -> 'PlaybackConfig':
@@ -97,7 +210,7 @@ class PlaybackConfig:
         config.origin_lon = origin.get('longitude', config.origin_lon)
         config.origin_alt = origin.get('altitude', config.origin_alt)
 
-        # Control settings
+        # Control settings (legacy - for backward compatibility)
         controls = data.get('controls', {})
         config.aileron_max_deg = controls.get('aileron_max_deg', config.aileron_max_deg)
         config.elevator_max_deg = controls.get('elevator_max_deg', config.elevator_max_deg)
@@ -110,7 +223,21 @@ class PlaybackConfig:
         config.send_controls = features.get('controls', config.send_controls)
         config.send_propulsion = features.get('propulsion', config.send_propulsion)
 
+        # Load variable mapping configuration (the key feature for customization)
+        variable_mapping = data.get('variable_mapping', {})
+        if variable_mapping:
+            config.dataref_config = DatarefConfig.from_dict(variable_mapping)
+        else:
+            # Use defaults if no mapping provided
+            config.dataref_config = DatarefConfig.defaults()
+
         return config
+
+    def get_dataref_config(self) -> DatarefConfig:
+        """Get dataref configuration, using defaults if not set."""
+        if self.dataref_config is None:
+            return DatarefConfig.defaults()
+        return self.dataref_config
 
 
 class XPlanePlayer:
@@ -458,6 +585,9 @@ class XPlanePlayer:
         if not backend or not backend.connected:
             return
 
+        # Get dataref configuration
+        dref_cfg = self.config.get_dataref_config()
+
         # Position and attitude
         if self.config.send_position or self.config.send_attitude:
             # Convert NED to lat/lon/alt
@@ -478,43 +608,77 @@ class XPlanePlayer:
                 roll, pitch, heading
             )
 
-        # Control surfaces
+        # Control surfaces - using configurable datarefs
         if self.config.send_controls:
-            # Convert from radians to normalized [-1, 1]
-            aileron = radians_to_normalized(
-                data.delta_a[frame_idx], self.config.aileron_max_deg)
-            elevator = radians_to_normalized(
-                data.delta_e[frame_idx], self.config.elevator_max_deg)
-            rudder = radians_to_normalized(
-                data.delta_r[frame_idx], self.config.rudder_max_deg)
-
-            backend.send_controls(
-                aileron=aileron,
-                elevator=elevator,
-                rudder=rudder
-            )
-
-        # Propulsion (VTOL-specific datarefs)
-        if self.config.send_propulsion and hasattr(data, 'RPM_Cl'):
             drefs = {}
 
-            # RPM values - normalize to percentage (0-100)
-            # Assuming max RPM around 5000-10000, adjust as needed
-            max_rpm = 10000
-            if hasattr(data, 'RPM_Cl'):
-                rpm_l_pct = (data.RPM_Cl[frame_idx] / max_rpm) * 100
-                drefs["sim/flightmodel/engine/ENGN_N1_[0]"] = rpm_l_pct
-            if hasattr(data, 'RPM_Cr'):
-                rpm_r_pct = (data.RPM_Cr[frame_idx] / max_rpm) * 100
-                drefs["sim/flightmodel/engine/ENGN_N1_[1]"] = rpm_r_pct
+            # Aileron - use config for max deflection and target dref
+            if dref_cfg.aileron and len(data.delta_a) > 0:
+                cfg = dref_cfg.aileron
+                max_deg = cfg.max_deflection
+                value_deg = math.degrees(data.delta_a[frame_idx])
+                if cfg.inverted:
+                    value_deg = -value_deg
+                drefs[cfg.target_dref] = value_deg
+                # Also set right aileron (opposite direction)
+                right_dref = cfg.target_dref.replace("wing1l", "wing1r")
+                if right_dref != cfg.target_dref:
+                    drefs[right_dref] = -value_deg
 
-            # Tilt angles (radians to degrees)
-            if hasattr(data, 'theta_Cl'):
-                tilt_l = math.degrees(data.theta_Cl[frame_idx])
-                drefs["sim/flightmodel/engine/POINT_pitch[0]"] = tilt_l
-            if hasattr(data, 'theta_Cr'):
-                tilt_r = math.degrees(data.theta_Cr[frame_idx])
-                drefs["sim/flightmodel/engine/POINT_pitch[1]"] = tilt_r
+            # Elevator - use config for max deflection and target dref
+            if dref_cfg.elevator and len(data.delta_e) > 0:
+                cfg = dref_cfg.elevator
+                value_deg = math.degrees(data.delta_e[frame_idx])
+                if cfg.inverted:
+                    value_deg = -value_deg
+                drefs[cfg.target_dref] = value_deg
+                # Set both elevator surfaces
+                second_dref = cfg.target_dref.replace("hstab1", "hstab2")
+                if second_dref != cfg.target_dref:
+                    drefs[second_dref] = value_deg
+
+            # Rudder - use config for max deflection and target dref
+            if dref_cfg.rudder and len(data.delta_r) > 0:
+                cfg = dref_cfg.rudder
+                value_deg = math.degrees(data.delta_r[frame_idx])
+                if cfg.inverted:
+                    value_deg = -value_deg
+                drefs[cfg.target_dref] = value_deg
+
+            if drefs:
+                backend.send_datarefs(drefs)
+
+        # Propulsion - using configurable datarefs
+        if self.config.send_propulsion:
+            drefs = {}
+
+            # Left RPM - use config for target dref and max_value
+            if dref_cfg.rpm_left and len(data.RPM_Cl) > 0:
+                cfg = dref_cfg.rpm_left
+                rpm_pct = (data.RPM_Cl[frame_idx] / cfg.max_value) * 100 * cfg.scale
+                drefs[cfg.target_dref] = rpm_pct
+
+            # Right RPM - use config for target dref and max_value
+            if dref_cfg.rpm_right and len(data.RPM_Cr) > 0:
+                cfg = dref_cfg.rpm_right
+                rpm_pct = (data.RPM_Cr[frame_idx] / cfg.max_value) * 100 * cfg.scale
+                drefs[cfg.target_dref] = rpm_pct
+
+            # Left tilt angle - use config for target dref and unit conversion
+            if dref_cfg.tilt_left and len(data.theta_Cl) > 0:
+                cfg = dref_cfg.tilt_left
+                value = data.theta_Cl[frame_idx]
+                if cfg.source_unit == "radians" and cfg.target_unit == "degrees":
+                    value = math.degrees(value)
+                drefs[cfg.target_dref] = value
+
+            # Right tilt angle - use config for target dref and unit conversion
+            if dref_cfg.tilt_right and len(data.theta_Cr) > 0:
+                cfg = dref_cfg.tilt_right
+                value = data.theta_Cr[frame_idx]
+                if cfg.source_unit == "radians" and cfg.target_unit == "degrees":
+                    value = math.degrees(value)
+                drefs[cfg.target_dref] = value
 
             if drefs:
                 backend.send_datarefs(drefs)

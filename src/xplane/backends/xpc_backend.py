@@ -91,7 +91,7 @@ class XPCBackend(XPlaneBackend):
         if self._client:
             try:
                 self._client.close()
-            except:
+            except Exception:
                 pass
             self._client = None
         self._connected = False
@@ -233,5 +233,5 @@ class XPCBackend(XPlaneBackend):
 
         try:
             self._client.sendTEXT("")
-        except:
+        except Exception:
             pass

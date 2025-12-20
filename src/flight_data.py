@@ -2,6 +2,7 @@
 Core FlightData class - the central data model for flight simulation data.
 """
 
+import warnings
 import numpy as np
 import scipy.io as sio
 import yaml
@@ -12,7 +13,9 @@ from typing import Dict, Optional, Any, Union
 from .utils.conversions import UnitConverter
 
 
-# Default variable mappings (used if no config file provided)
+# Default variable mappings - FALLBACK ONLY
+# This is used when config/data_mapping.yaml is not found.
+# Users should edit config/data_mapping.yaml for their own data format.
 DEFAULT_MAPPING = {
     'position': {'north': 'N', 'east': 'E', 'down': 'D'},
     'attitude': {'roll': 'phi', 'pitch': 'theta', 'yaw': 'psi'},
@@ -222,6 +225,9 @@ class FlightData:
             if not k.startswith('__')
         }
 
+        # Validate loaded data
+        flight_data._validate_data()
+
         # Compute derived quantities
         flight_data._compute_derived_quantities()
 
@@ -245,6 +251,58 @@ class FlightData:
 
         # Altitude (negative of Down)
         self.altitude = -self.D
+
+    def _validate_data(self) -> None:
+        """
+        Validate loaded data for NaN/Inf values and consistency.
+
+        Raises:
+            ValueError: If NaN or Inf values are found in critical arrays.
+        """
+        # Define arrays to validate
+        arrays_to_check = [
+            (self.N, 'N (North position)'),
+            (self.E, 'E (East position)'),
+            (self.D, 'D (Down position)'),
+            (self.phi, 'phi (Roll angle)'),
+            (self.theta, 'theta (Pitch angle)'),
+            (self.psi, 'psi (Yaw angle)'),
+        ]
+
+        for arr, name in arrays_to_check:
+            if len(arr) == 0:
+                continue
+            if np.any(np.isnan(arr)):
+                raise ValueError(f"NaN values found in {name}. Check data source.")
+            if np.any(np.isinf(arr)):
+                raise ValueError(f"Infinite values found in {name}. Check data source.")
+
+        # Check array length consistency
+        arrays_with_data = [(arr, name) for arr, name in arrays_to_check if len(arr) > 0]
+        if len(arrays_with_data) > 1:
+            lengths = [len(arr) for arr, _ in arrays_with_data]
+            if len(set(lengths)) > 1:
+                details = [f"{name}: {len(arr)}" for arr, name in arrays_with_data]
+                raise ValueError(
+                    f"Inconsistent array lengths: {', '.join(details)}. "
+                    "All arrays must have the same number of samples."
+                )
+
+        # Warn about potential unit issues
+        if len(self.phi) > 0:
+            if np.any(np.abs(self.phi) > 2 * np.pi):
+                warnings.warn(
+                    "Roll angles (phi) exceed 2π radians. "
+                    "If your data is in degrees, set 'attitude: degrees' in data_mapping.yaml",
+                    UserWarning
+                )
+        if len(self.theta) > 0:
+            if np.any(np.abs(self.theta) > np.pi / 2 + 0.1):  # Allow small margin
+                warnings.warn(
+                    "Pitch angles (theta) exceed ±90°. "
+                    "If your data is in degrees, set 'attitude: degrees' in data_mapping.yaml",
+                    UserWarning
+                )
 
     # Convenience properties for degree conversions
     @property

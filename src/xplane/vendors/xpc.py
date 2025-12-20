@@ -20,7 +20,7 @@ class XPlaneConnect(object):
         xpIP = None
         try:
             xpIP = socket.gethostbyname(xpHost)
-        except:
+        except socket.error:
             raise ValueError("Unable to resolve xpHost.")
 
         if xpPort < 0 or xpPort > 65535:

@@ -283,12 +283,25 @@ See [X-Plane Setup Guide](docs/guides/xplane-setup.md) for complete documentatio
 - [Data Format Guide](docs/guides/data-format.md) - MAT file requirements
 - [X-Plane Setup](docs/guides/xplane-setup.md) - X-Plane integration guide
 - [Configuration Guide](docs/guides/configuration.md) - All configuration options
+- [Custom Aircraft Guide](docs/guides/custom-aircraft.md) - Map ANY data to ANY X-Plane aircraft
+
+## Key Features
+
+### Fully Configurable Data Mapping
+
+Map **any** .mat file variables to **any** X-Plane datarefs - no code changes needed:
+
+1. **`config/data_mapping.yaml`** - Map your variable names to internal names
+2. **`config/xplane.yaml`** - Map internal names to X-Plane datarefs
+
+See [Custom Aircraft Guide](docs/guides/custom-aircraft.md) for complete examples.
 
 ## Future Roadmap
 
 - [x] **X-Plane Integration**: Real-time visualization via UDP protocol
 - [x] **Flight Replay**: Animate simulation in X-Plane
 - [x] **Configurable Data Mapping**: Support any MAT file format
+- [x] **Configurable X-Plane Datarefs**: Map to any X-Plane aircraft
 - [ ] **Comparison Tools**: Overlay multiple flights for analysis
 - [ ] **KML Export**: Google Earth visualization
 - [ ] **Report Generation**: PDF reports with analysis
