@@ -59,6 +59,7 @@ class PropulsionMapping:
     source_unit: str = "radians"
     target_unit: str = "degrees"
     index: Optional[int] = None  # For array datarefs like acf_vertcant[n]
+    invert_convention: bool = False  # For tilt: transform = 90 - value
 
 
 @dataclass
@@ -137,13 +138,15 @@ class DatarefConfig:
                 target_dref="sim/aircraft/prop/acf_vertcant",
                 source_unit="radians",
                 target_unit="degrees",
-                index=0
+                index=0,
+                invert_convention=True  # Sim: 0=hover, X-Plane: 0=forward
             ),
             tilt_right=PropulsionMapping(
                 target_dref="sim/aircraft/prop/acf_vertcant",
                 source_unit="radians",
                 target_unit="degrees",
-                index=1
+                index=1,
+                invert_convention=True  # Sim: 0=hover, X-Plane: 0=forward
             ),
         )
 
@@ -662,28 +665,36 @@ class XPlanePlayer:
         # Propulsion - using configurable datarefs
         if self.config.send_propulsion:
             drefs = {}
+            sample_rate = data.sample_rate
 
-            # Left RPM - set throttle AND N1 for prop rotation
+            # Left RPM - set throttle, N1, AND prop rotation angle
             if dref_cfg.rpm_left and len(data.RPM_Cl) > 0:
                 cfg = dref_cfg.rpm_left
                 rpm_value = data.RPM_Cl[frame_idx]
-                # Set throttle (0-1) to make props visually spin
+                # Set throttle (0-1)
                 throttle = min(1.0, rpm_value / cfg.max_value)
                 drefs["sim/flightmodel/engine/ENGN_thro[0]"] = throttle
-                # Also set N1 for instrumentation
+                # Set N1 for instrumentation
                 rpm_pct = (rpm_value / cfg.max_value) * 100 * cfg.scale
                 drefs[cfg.target_dref] = rpm_pct
+                # Animate prop rotation: degrees = (frame * RPM * 6 / sample_rate) % 360
+                # RPM * 6 = degrees per second (360° / 60s = 6°/RPM)
+                prop_angle = (frame_idx * rpm_value * 6.0 / sample_rate) % 360.0
+                drefs["sim/flightmodel2/engines/prop_rotation_angle_deg[0]"] = prop_angle
 
-            # Right RPM - set throttle AND N1 for prop rotation
+            # Right RPM - set throttle, N1, AND prop rotation angle
             if dref_cfg.rpm_right and len(data.RPM_Cr) > 0:
                 cfg = dref_cfg.rpm_right
                 rpm_value = data.RPM_Cr[frame_idx]
-                # Set throttle (0-1) to make props visually spin
+                # Set throttle (0-1)
                 throttle = min(1.0, rpm_value / cfg.max_value)
                 drefs["sim/flightmodel/engine/ENGN_thro[1]"] = throttle
-                # Also set N1 for instrumentation
+                # Set N1 for instrumentation
                 rpm_pct = (rpm_value / cfg.max_value) * 100 * cfg.scale
                 drefs[cfg.target_dref] = rpm_pct
+                # Animate prop rotation
+                prop_angle = (frame_idx * rpm_value * 6.0 / sample_rate) % 360.0
+                drefs["sim/flightmodel2/engines/prop_rotation_angle_deg[1]"] = prop_angle
 
             # Left tilt angle - use config for target dref and unit conversion
             if dref_cfg.tilt_left and len(data.theta_Cl) > 0:
@@ -691,6 +702,9 @@ class XPlanePlayer:
                 value = data.theta_Cl[frame_idx]
                 if cfg.source_unit == "radians" and cfg.target_unit == "degrees":
                     value = math.degrees(value)
+                # Apply convention inversion if needed (sim: 0=hover, xplane: 0=forward)
+                if cfg.invert_convention:
+                    value = 90.0 - value
                 # Handle array dataref with index (e.g., acf_vertcant[0])
                 target = cfg.target_dref
                 if cfg.index is not None and '[' not in target:
@@ -703,6 +717,9 @@ class XPlanePlayer:
                 value = data.theta_Cr[frame_idx]
                 if cfg.source_unit == "radians" and cfg.target_unit == "degrees":
                     value = math.degrees(value)
+                # Apply convention inversion if needed (sim: 0=hover, xplane: 0=forward)
+                if cfg.invert_convention:
+                    value = 90.0 - value
                 # Handle array dataref with index (e.g., acf_vertcant[1])
                 target = cfg.target_dref
                 if cfg.index is not None and '[' not in target:

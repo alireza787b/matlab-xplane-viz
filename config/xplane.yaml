@@ -108,12 +108,14 @@ variable_mapping:
       target_dref: "sim/aircraft/prop/acf_vertcant"
       target_unit: "degrees"
       index: 0  # Prop/engine index for array dataref
+      invert_convention: true  # Sim: 0=hover, X-Plane: 0=forward -> transform: 90-value
 
     tilt_right:
       source_unit: "radians"
       target_dref: "sim/aircraft/prop/acf_vertcant"
       target_unit: "degrees"
       index: 1  # Prop/engine index for array dataref
+      invert_convention: true  # Sim: 0=hover, X-Plane: 0=forward -> transform: 90-value
 
 # Common X-Plane Datarefs Reference
 # =================================
