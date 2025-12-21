@@ -105,13 +105,15 @@ variable_mapping:
 
     tilt_left:
       source_unit: "radians"
-      target_dref: "sim/flightmodel/engine/POINT_pitch[0]"
+      target_dref: "sim/aircraft/prop/acf_vertcant"
       target_unit: "degrees"
+      index: 0  # Prop/engine index for array dataref
 
     tilt_right:
       source_unit: "radians"
-      target_dref: "sim/flightmodel/engine/POINT_pitch[1]"
+      target_dref: "sim/aircraft/prop/acf_vertcant"
       target_unit: "degrees"
+      index: 1  # Prop/engine index for array dataref
 
 # Common X-Plane Datarefs Reference
 # =================================

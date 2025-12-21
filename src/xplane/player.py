@@ -58,6 +58,7 @@ class PropulsionMapping:
     scale: float = 0.01
     source_unit: str = "radians"
     target_unit: str = "degrees"
+    index: Optional[int] = None  # For array datarefs like acf_vertcant[n]
 
 
 @dataclass
@@ -133,14 +134,16 @@ class DatarefConfig:
                 scale=0.01
             ),
             tilt_left=PropulsionMapping(
-                target_dref="sim/flightmodel/engine/POINT_pitch[0]",
+                target_dref="sim/aircraft/prop/acf_vertcant",
                 source_unit="radians",
-                target_unit="degrees"
+                target_unit="degrees",
+                index=0
             ),
             tilt_right=PropulsionMapping(
-                target_dref="sim/flightmodel/engine/POINT_pitch[1]",
+                target_dref="sim/aircraft/prop/acf_vertcant",
                 source_unit="radians",
-                target_unit="degrees"
+                target_unit="degrees",
+                index=1
             ),
         )
 
@@ -478,6 +481,10 @@ class XPlanePlayer:
         if end_time is not None:
             end_frame = int(np.searchsorted(self._flight_data.time, end_time))
 
+        # Enable physics override to prevent X-Plane fighting our commands
+        if self._backend:
+            self._backend.override_physics(True)
+
         # Start playback thread
         self._stop_event.clear()
         self._pause_event.clear()
@@ -512,6 +519,10 @@ class XPlanePlayer:
             self._playback_thread.join(timeout=2.0)
         self._state = PlaybackState.STOPPED
         self._current_frame = 0
+
+        # Release physics override
+        if self._backend and self._backend.connected:
+            self._backend.override_physics(False)
 
     def seek(self, time_seconds: float) -> None:
         """
@@ -652,16 +663,26 @@ class XPlanePlayer:
         if self.config.send_propulsion:
             drefs = {}
 
-            # Left RPM - use config for target dref and max_value
+            # Left RPM - set throttle AND N1 for prop rotation
             if dref_cfg.rpm_left and len(data.RPM_Cl) > 0:
                 cfg = dref_cfg.rpm_left
-                rpm_pct = (data.RPM_Cl[frame_idx] / cfg.max_value) * 100 * cfg.scale
+                rpm_value = data.RPM_Cl[frame_idx]
+                # Set throttle (0-1) to make props visually spin
+                throttle = min(1.0, rpm_value / cfg.max_value)
+                drefs["sim/flightmodel/engine/ENGN_thro[0]"] = throttle
+                # Also set N1 for instrumentation
+                rpm_pct = (rpm_value / cfg.max_value) * 100 * cfg.scale
                 drefs[cfg.target_dref] = rpm_pct
 
-            # Right RPM - use config for target dref and max_value
+            # Right RPM - set throttle AND N1 for prop rotation
             if dref_cfg.rpm_right and len(data.RPM_Cr) > 0:
                 cfg = dref_cfg.rpm_right
-                rpm_pct = (data.RPM_Cr[frame_idx] / cfg.max_value) * 100 * cfg.scale
+                rpm_value = data.RPM_Cr[frame_idx]
+                # Set throttle (0-1) to make props visually spin
+                throttle = min(1.0, rpm_value / cfg.max_value)
+                drefs["sim/flightmodel/engine/ENGN_thro[1]"] = throttle
+                # Also set N1 for instrumentation
+                rpm_pct = (rpm_value / cfg.max_value) * 100 * cfg.scale
                 drefs[cfg.target_dref] = rpm_pct
 
             # Left tilt angle - use config for target dref and unit conversion
@@ -670,7 +691,11 @@ class XPlanePlayer:
                 value = data.theta_Cl[frame_idx]
                 if cfg.source_unit == "radians" and cfg.target_unit == "degrees":
                     value = math.degrees(value)
-                drefs[cfg.target_dref] = value
+                # Handle array dataref with index (e.g., acf_vertcant[0])
+                target = cfg.target_dref
+                if cfg.index is not None and '[' not in target:
+                    target = f"{target}[{cfg.index}]"
+                drefs[target] = value
 
             # Right tilt angle - use config for target dref and unit conversion
             if dref_cfg.tilt_right and len(data.theta_Cr) > 0:
@@ -678,7 +703,11 @@ class XPlanePlayer:
                 value = data.theta_Cr[frame_idx]
                 if cfg.source_unit == "radians" and cfg.target_unit == "degrees":
                     value = math.degrees(value)
-                drefs[cfg.target_dref] = value
+                # Handle array dataref with index (e.g., acf_vertcant[1])
+                target = cfg.target_dref
+                if cfg.index is not None and '[' not in target:
+                    target = f"{target}[{cfg.index}]"
+                drefs[target] = value
 
             if drefs:
                 backend.send_datarefs(drefs)
