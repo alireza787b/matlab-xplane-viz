@@ -58,13 +58,22 @@ def run_xplane_playback(
         print(f"Error: X-Plane module not available: {e}")
         return 1
 
-    # Create config
-    config = PlaybackConfig(
-        host=host,
-        backend=backend,
-        default_speed=speed,
-        loop=loop
-    )
+    # Load config from YAML file (this contains dataref mappings, offset values, etc.)
+    project_root = Path(__file__).parent
+    config_path = project_root / 'config' / 'xplane.yaml'
+
+    if config_path.exists():
+        print(f"Loading X-Plane config from: {config_path}")
+        config = PlaybackConfig.from_yaml(config_path)
+    else:
+        print("Warning: config/xplane.yaml not found, using defaults")
+        config = PlaybackConfig()
+
+    # Override with command-line arguments
+    config.host = host
+    config.backend = backend
+    config.default_speed = speed
+    config.loop = loop
 
     # Parse origin if provided
     if origin:

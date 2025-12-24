@@ -60,6 +60,8 @@ class PropulsionMapping:
     target_unit: str = "degrees"
     index: Optional[int] = None  # For array datarefs like acf_vertcant[n]
     invert_convention: bool = False  # For tilt: transform = 90 - value
+    offset: float = 0.0  # Fixed offset to add (in target units, e.g., degrees)
+    inverted: bool = False  # Negate value if True (multiply by -1)
 
 
 @dataclass
@@ -138,15 +140,17 @@ class DatarefConfig:
                 target_dref="sim/aircraft/prop/acf_vertcant",
                 source_unit="radians",
                 target_unit="degrees",
-                index=0,
-                invert_convention=True  # Sim: 0=hover, X-Plane: 0=forward
+                index=1,  # X-Plane uses index 1 for left motor
+                invert_convention=False,
+                offset=-90.0  # -90° = forward flight
             ),
             tilt_right=PropulsionMapping(
                 target_dref="sim/aircraft/prop/acf_vertcant",
                 source_unit="radians",
                 target_unit="degrees",
-                index=1,
-                invert_convention=True  # Sim: 0=hover, X-Plane: 0=forward
+                index=0,  # X-Plane uses index 0 for right motor
+                invert_convention=False,
+                offset=-90.0  # -90° = forward flight
             ),
         )
 
@@ -260,13 +264,15 @@ class XPlanePlayer:
     """
 
     def __init__(self, config: Optional[PlaybackConfig] = None,
-                 config_path: Optional[Union[str, Path]] = None):
+                 config_path: Optional[Union[str, Path]] = None,
+                 verbose: bool = False):
         """
         Initialize the X-Plane player.
 
         Args:
             config: PlaybackConfig object
             config_path: Path to YAML configuration file
+            verbose: Enable verbose debug logging
         """
         if config_path:
             self.config = PlaybackConfig.from_yaml(config_path)
@@ -278,6 +284,8 @@ class XPlanePlayer:
         self._backend: Optional[XPlaneBackend] = None
         self._flight_data: Optional[FlightData] = None
         self._converter: Optional[NEDConverter] = None
+        self._verbose = verbose
+        self._frame_log_interval = 100  # Log every N frames when verbose
 
         self._state = PlaybackState.STOPPED
         self._speed: float = self.config.default_speed
@@ -602,6 +610,30 @@ class XPlanePlayer:
         # Get dataref configuration
         dref_cfg = self.config.get_dataref_config()
 
+        # Verbose debug logging
+        if self._verbose and frame_idx % self._frame_log_interval == 0:
+            print(f"\n[Frame {frame_idx}] Debug data:")
+            if len(data.theta_Cl) > 0:
+                print(f"  Tilt L: {math.degrees(data.theta_Cl[frame_idx]):.2f}°")
+            else:
+                print(f"  Tilt L: EMPTY ARRAY")
+            if len(data.theta_Cr) > 0:
+                print(f"  Tilt R: {math.degrees(data.theta_Cr[frame_idx]):.2f}°")
+            else:
+                print(f"  Tilt R: EMPTY ARRAY")
+            if len(data.RPM_Cl) > 0:
+                print(f"  RPM L: {data.RPM_Cl[frame_idx]:.0f}")
+            else:
+                print(f"  RPM L: EMPTY ARRAY")
+            if len(data.RPM_Cr) > 0:
+                print(f"  RPM R: {data.RPM_Cr[frame_idx]:.0f}")
+            else:
+                print(f"  RPM R: EMPTY ARRAY")
+            if len(data.delta_e) > 0:
+                print(f"  Elevator: {math.degrees(data.delta_e[frame_idx]):.2f}°")
+            else:
+                print(f"  Elevator: EMPTY ARRAY")
+
         # Position and attitude
         if self.config.send_position or self.config.send_attitude:
             # Convert NED to lat/lon/alt
@@ -625,6 +657,9 @@ class XPlanePlayer:
         # Control surfaces - using configurable datarefs
         if self.config.send_controls:
             drefs = {}
+
+            # Enable control surface override to prevent physics from fighting our values
+            drefs["sim/operation/override/override_control_surfaces"] = 1
 
             # Aileron - use config for max deflection and target dref
             if dref_cfg.aileron and len(data.delta_a) > 0:
@@ -667,34 +702,72 @@ class XPlanePlayer:
             drefs = {}
             sample_rate = data.sample_rate
 
-            # Left RPM - set throttle, N1, AND prop rotation angle
+            # DEBUG: Print propulsion status on first frame
+            if frame_idx == 0:
+                print(f"\n[DEBUG] Propulsion config:")
+                print(f"  rpm_left config: {dref_cfg.rpm_left}")
+                print(f"  rpm_right config: {dref_cfg.rpm_right}")
+                print(f"  tilt_left config: {dref_cfg.tilt_left}")
+                print(f"  tilt_right config: {dref_cfg.tilt_right}")
+                print(f"  RPM_Cl length: {len(data.RPM_Cl) if data.RPM_Cl is not None else 'None'}")
+                print(f"  RPM_Cr length: {len(data.RPM_Cr) if data.RPM_Cr is not None else 'None'}")
+                print(f"  theta_Cl length: {len(data.theta_Cl) if data.theta_Cl is not None else 'None'}")
+                print(f"  theta_Cr length: {len(data.theta_Cr) if data.theta_Cr is not None else 'None'}")
+
+            # Note: Engine indices are SWAPPED in X-Plane (0=right, 1=left)
+            # Left RPM -> X-Plane engine index 1
             if dref_cfg.rpm_left and len(data.RPM_Cl) > 0:
                 cfg = dref_cfg.rpm_left
                 rpm_value = data.RPM_Cl[frame_idx]
+                xp_idx = 1  # Left motor = X-Plane index 1
+
                 # Set throttle (0-1)
                 throttle = min(1.0, rpm_value / cfg.max_value)
-                drefs["sim/flightmodel/engine/ENGN_thro[0]"] = throttle
-                # Set N1 for instrumentation
-                rpm_pct = (rpm_value / cfg.max_value) * 100 * cfg.scale
-                drefs[cfg.target_dref] = rpm_pct
-                # Animate prop rotation: degrees = (frame * RPM * 6 / sample_rate) % 360
-                # RPM * 6 = degrees per second (360° / 60s = 6°/RPM)
-                prop_angle = (frame_idx * rpm_value * 6.0 / sample_rate) % 360.0
-                drefs["sim/flightmodel2/engines/prop_rotation_angle_deg[0]"] = prop_angle
+                drefs[f"sim/flightmodel/engine/ENGN_thro[{xp_idx}]"] = throttle
+                # Mark engine as running
+                drefs[f"sim/flightmodel/engine/ENGN_running[{xp_idx}]"] = 1
+                # Set N1 percentage (engine speed indicator)
+                n1_pct = (rpm_value / cfg.max_value) * 100
+                drefs[f"sim/flightmodel/engine/ENGN_N1_[{xp_idx}]"] = n1_pct
 
-            # Right RPM - set throttle, N1, AND prop rotation angle
+                # Calculate prop angle (0-360 degrees, wraps around)
+                prop_angle = (frame_idx * rpm_value * 6.0 / sample_rate) % 360.0
+
+                # Try ALL known prop rotation datarefs for maximum compatibility
+                # 1. Prop disc override + rotation angle (X-Plane 11+)
+                drefs[f"sim/flightmodel2/engines/prop_disc/override[{xp_idx}]"] = 1
+                drefs[f"sim/flightmodel2/engines/prop_rotation_angle_deg[{xp_idx}]"] = prop_angle
+                # 2. Cockpit actuators (alternative path)
+                drefs[f"sim/cockpit2/engine/actuators/prop_angle_degrees[{xp_idx}]"] = prop_angle
+                # 3. Engine POINT datarefs (older method)
+                drefs[f"sim/flightmodel/engine/POINT_prop_ang_deg[{xp_idx}]"] = prop_angle
+
+            # Right RPM -> X-Plane engine index 0
             if dref_cfg.rpm_right and len(data.RPM_Cr) > 0:
                 cfg = dref_cfg.rpm_right
                 rpm_value = data.RPM_Cr[frame_idx]
+                xp_idx = 0  # Right motor = X-Plane index 0
+
                 # Set throttle (0-1)
                 throttle = min(1.0, rpm_value / cfg.max_value)
-                drefs["sim/flightmodel/engine/ENGN_thro[1]"] = throttle
-                # Set N1 for instrumentation
-                rpm_pct = (rpm_value / cfg.max_value) * 100 * cfg.scale
-                drefs[cfg.target_dref] = rpm_pct
-                # Animate prop rotation
+                drefs[f"sim/flightmodel/engine/ENGN_thro[{xp_idx}]"] = throttle
+                # Mark engine as running
+                drefs[f"sim/flightmodel/engine/ENGN_running[{xp_idx}]"] = 1
+                # Set N1 percentage (engine speed indicator)
+                n1_pct = (rpm_value / cfg.max_value) * 100
+                drefs[f"sim/flightmodel/engine/ENGN_N1_[{xp_idx}]"] = n1_pct
+
+                # Calculate prop angle (0-360 degrees, wraps around)
                 prop_angle = (frame_idx * rpm_value * 6.0 / sample_rate) % 360.0
-                drefs["sim/flightmodel2/engines/prop_rotation_angle_deg[1]"] = prop_angle
+
+                # Try ALL known prop rotation datarefs for maximum compatibility
+                # 1. Prop disc override + rotation angle (X-Plane 11+)
+                drefs[f"sim/flightmodel2/engines/prop_disc/override[{xp_idx}]"] = 1
+                drefs[f"sim/flightmodel2/engines/prop_rotation_angle_deg[{xp_idx}]"] = prop_angle
+                # 2. Cockpit actuators (alternative path)
+                drefs[f"sim/cockpit2/engine/actuators/prop_angle_degrees[{xp_idx}]"] = prop_angle
+                # 3. Engine POINT datarefs (older method)
+                drefs[f"sim/flightmodel/engine/POINT_prop_ang_deg[{xp_idx}]"] = prop_angle
 
             # Left tilt angle - use config for target dref and unit conversion
             if dref_cfg.tilt_left and len(data.theta_Cl) > 0:
@@ -705,11 +778,19 @@ class XPlanePlayer:
                 # Apply convention inversion if needed (sim: 0=hover, xplane: 0=forward)
                 if cfg.invert_convention:
                     value = 90.0 - value
+                # Apply inverted (negate) if configured
+                if cfg.inverted:
+                    value = -value
+                # Apply offset (e.g., 180° to flip direction)
+                value = value + cfg.offset
                 # Handle array dataref with index (e.g., acf_vertcant[0])
                 target = cfg.target_dref
                 if cfg.index is not None and '[' not in target:
                     target = f"{target}[{cfg.index}]"
                 drefs[target] = value
+                # DEBUG: Print tilt value on first frame
+                if frame_idx == 0:
+                    print(f"[DEBUG] Tilt LEFT: raw={math.degrees(data.theta_Cl[0]):.1f}°, offset={cfg.offset}, final={value:.1f}° -> {target}")
 
             # Right tilt angle - use config for target dref and unit conversion
             if dref_cfg.tilt_right and len(data.theta_Cr) > 0:
@@ -720,11 +801,25 @@ class XPlanePlayer:
                 # Apply convention inversion if needed (sim: 0=hover, xplane: 0=forward)
                 if cfg.invert_convention:
                     value = 90.0 - value
+                # Apply inverted (negate) if configured
+                if cfg.inverted:
+                    value = -value
+                # Apply offset (e.g., 180° to flip direction)
+                value = value + cfg.offset
                 # Handle array dataref with index (e.g., acf_vertcant[1])
                 target = cfg.target_dref
                 if cfg.index is not None and '[' not in target:
                     target = f"{target}[{cfg.index}]"
                 drefs[target] = value
+                # DEBUG: Print tilt value on first frame
+                if frame_idx == 0:
+                    print(f"[DEBUG] Tilt RIGHT: raw={math.degrees(data.theta_Cr[0]):.1f}°, offset={cfg.offset}, final={value:.1f}° -> {target}")
+
+            # DEBUG: Print all datarefs being sent on first frame
+            if frame_idx == 0 and drefs:
+                print(f"[DEBUG] Sending {len(drefs)} propulsion datarefs:")
+                for dref, val in drefs.items():
+                    print(f"  {dref} = {val}")
 
             if drefs:
                 backend.send_datarefs(drefs)

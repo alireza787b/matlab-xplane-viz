@@ -173,8 +173,8 @@ class NativeUDPBackend(XPlaneBackend):
             dref_bytes = dref_bytes[:499]
         dref_padded = dref_bytes.ljust(500, b'\x00')
 
-        # Pack DREF message
-        message = struct.pack('<4sf500s', b'DREF', float(value), dref_padded)
+        # Pack DREF message (5-byte header: "DREF" + null, then float + dataref)
+        message = struct.pack('<4sxf500s', b'DREF', float(value), dref_padded)
 
         try:
             self._socket.sendto(message, (self._host, self._port))

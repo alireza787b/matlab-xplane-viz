@@ -231,7 +231,66 @@ class FlightData:
         # Compute derived quantities
         flight_data._compute_derived_quantities()
 
+        # Print loading summary
+        flight_data._print_loading_summary()
+
         return flight_data
+
+    def _print_loading_summary(self) -> None:
+        """Print a summary of loaded data for debugging."""
+        print(f"\nFlight Data Loading Summary:")
+        print(f"  Source: {Path(self.source_file).name}")
+        print(f"  Duration: {self.duration:.1f}s, Samples: {self.n_samples}, Rate: {self.sample_rate}Hz")
+
+        # Position/Attitude
+        if len(self.N) > 0:
+            print(f"  Position: N=[{self.N.min():.1f}, {self.N.max():.1f}]m, "
+                  f"E=[{self.E.min():.1f}, {self.E.max():.1f}]m, "
+                  f"Alt=[{self.altitude.min():.1f}, {self.altitude.max():.1f}]m")
+
+        # Propulsion - tilt angles
+        if len(self.theta_Cl) > 0:
+            tilt_l_deg = np.degrees(self.theta_Cl)
+            print(f"  Tilt L (theta_Cl): [{tilt_l_deg.min():.1f}°, {tilt_l_deg.max():.1f}°] "
+                  f"({'constant' if tilt_l_deg.min() == tilt_l_deg.max() else 'varies'})")
+        else:
+            print(f"  Tilt L (theta_Cl): NOT LOADED")
+
+        if len(self.theta_Cr) > 0:
+            tilt_r_deg = np.degrees(self.theta_Cr)
+            print(f"  Tilt R (theta_Cr): [{tilt_r_deg.min():.1f}°, {tilt_r_deg.max():.1f}°] "
+                  f"({'constant' if tilt_r_deg.min() == tilt_r_deg.max() else 'varies'})")
+        else:
+            print(f"  Tilt R (theta_Cr): NOT LOADED")
+
+        # Propulsion - RPM
+        if len(self.RPM_Cl) > 0:
+            print(f"  RPM L: [{self.RPM_Cl.min():.0f}, {self.RPM_Cl.max():.0f}]")
+        else:
+            print(f"  RPM L: NOT LOADED")
+
+        if len(self.RPM_Cr) > 0:
+            print(f"  RPM R: [{self.RPM_Cr.min():.0f}, {self.RPM_Cr.max():.0f}]")
+        else:
+            print(f"  RPM R: NOT LOADED")
+
+        # Control surfaces
+        if len(self.delta_e) > 0:
+            elev_deg = np.degrees(self.delta_e)
+            print(f"  Elevator (delta_e): [{elev_deg.min():.1f}°, {elev_deg.max():.1f}°] "
+                  f"({'constant' if elev_deg.min() == elev_deg.max() else 'VARIES'})")
+        else:
+            print(f"  Elevator (delta_e): NOT LOADED")
+
+        if len(self.delta_a) > 0:
+            ail_deg = np.degrees(self.delta_a)
+            status = 'constant' if ail_deg.min() == ail_deg.max() else 'varies'
+            print(f"  Aileron (delta_a): [{ail_deg.min():.1f}°, {ail_deg.max():.1f}°] ({status})")
+
+        if len(self.delta_r) > 0:
+            rud_deg = np.degrees(self.delta_r)
+            status = 'constant' if rud_deg.min() == rud_deg.max() else 'varies'
+            print(f"  Rudder (delta_r): [{rud_deg.min():.1f}°, {rud_deg.max():.1f}°] ({status})")
 
     def _compute_derived_quantities(self) -> None:
         """Compute velocities and other derived quantities from position data."""
