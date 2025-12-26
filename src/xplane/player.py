@@ -301,6 +301,10 @@ class XPlanePlayer:
         self._on_frame: Optional[Callable[[int, float], None]] = None
         self._on_complete: Optional[Callable[[], None]] = None
 
+        # Prop rotation tracking (cumulative angles for smooth animation)
+        # Required because physics override disables automatic prop animation
+        self._prop_angles: List[float] = [0.0] * 8  # Track per-engine
+
     @property
     def state(self) -> PlaybackState:
         """Current playback state."""
@@ -495,6 +499,9 @@ class XPlanePlayer:
         # Enable physics override to prevent X-Plane fighting our commands
         if self._backend:
             self._backend.override_physics(True)
+
+        # Reset prop rotation angles for smooth animation from start
+        self._prop_angles = [0.0] * 8
 
         # Start playback thread
         self._stop_event.clear()
@@ -730,17 +737,13 @@ class XPlanePlayer:
                 n1_pct = (rpm_value / cfg.max_value) * 100
                 drefs[f"sim/flightmodel/engine/ENGN_N1_[{xp_idx}]"] = n1_pct
 
-                # Calculate prop angle (0-360 degrees, wraps around)
-                prop_angle = (frame_idx * rpm_value * 6.0 / sample_rate) % 360.0
-
-                # Try ALL known prop rotation datarefs for maximum compatibility
-                # 1. Prop disc override + rotation angle (X-Plane 11+)
-                drefs[f"sim/flightmodel2/engines/prop_disc/override[{xp_idx}]"] = 1
+                # Manually set prop rotation angle - REQUIRED when physics are overridden
+                # X-Plane cannot auto-animate props when VEHX/sendPOSI disables physics.
+                # Use wall-clock time for smooth, continuous rotation (avoids sampling aliasing)
+                # At 6000 RPM: 100 rev/sec, frame-based calc gives 3600°/frame = 0 after mod!
+                degrees_per_second = rpm_value * 6.0  # RPM * 360 / 60
+                prop_angle = (time.time() * degrees_per_second) % 360.0
                 drefs[f"sim/flightmodel2/engines/prop_rotation_angle_deg[{xp_idx}]"] = prop_angle
-                # 2. Cockpit actuators (alternative path)
-                drefs[f"sim/cockpit2/engine/actuators/prop_angle_degrees[{xp_idx}]"] = prop_angle
-                # 3. Engine POINT datarefs (older method)
-                drefs[f"sim/flightmodel/engine/POINT_prop_ang_deg[{xp_idx}]"] = prop_angle
 
             # Right RPM -> X-Plane engine index 0
             if dref_cfg.rpm_right and len(data.RPM_Cr) > 0:
@@ -757,17 +760,10 @@ class XPlanePlayer:
                 n1_pct = (rpm_value / cfg.max_value) * 100
                 drefs[f"sim/flightmodel/engine/ENGN_N1_[{xp_idx}]"] = n1_pct
 
-                # Calculate prop angle (0-360 degrees, wraps around)
-                prop_angle = (frame_idx * rpm_value * 6.0 / sample_rate) % 360.0
-
-                # Try ALL known prop rotation datarefs for maximum compatibility
-                # 1. Prop disc override + rotation angle (X-Plane 11+)
-                drefs[f"sim/flightmodel2/engines/prop_disc/override[{xp_idx}]"] = 1
+                # Manually set prop rotation angle - REQUIRED when physics are overridden
+                degrees_per_second = rpm_value * 6.0
+                prop_angle = (time.time() * degrees_per_second) % 360.0
                 drefs[f"sim/flightmodel2/engines/prop_rotation_angle_deg[{xp_idx}]"] = prop_angle
-                # 2. Cockpit actuators (alternative path)
-                drefs[f"sim/cockpit2/engine/actuators/prop_angle_degrees[{xp_idx}]"] = prop_angle
-                # 3. Engine POINT datarefs (older method)
-                drefs[f"sim/flightmodel/engine/POINT_prop_ang_deg[{xp_idx}]"] = prop_angle
 
             # Left tilt angle - use config for target dref and unit conversion
             if dref_cfg.tilt_left and len(data.theta_Cl) > 0:
@@ -817,9 +813,11 @@ class XPlanePlayer:
 
             # DEBUG: Print all datarefs being sent on first frame
             if frame_idx == 0 and drefs:
-                print(f"[DEBUG] Sending {len(drefs)} propulsion datarefs (array subscripts handled by backend):")
+                print(f"[DEBUG] Sending {len(drefs)} propulsion datarefs:")
+                print(f"  (Array subscripts are grouped and sent properly by backend)")
                 for dref, val in drefs.items():
                     print(f"  {dref} = {val}")
+                print(f"  Note: Props animate naturally via ENGN_running/thro/N1 - no manual override")
 
             if drefs:
                 backend.send_datarefs(drefs)
