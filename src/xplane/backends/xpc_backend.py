@@ -8,7 +8,8 @@ to be installed in X-Plane.
 Plugin download: https://github.com/nasa/XPlaneConnect/releases
 """
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple, Union
+import re
 import sys
 import os
 
@@ -149,6 +150,24 @@ class XPCBackend(XPlaneBackend):
         except Exception as e:
             print(f"Failed to send controls: {e}")
 
+    # Regex to parse array subscript notation: "dref[n]" -> ("dref", n)
+    _ARRAY_SUBSCRIPT_RE = re.compile(r'^(.+)\[(\d+)\]$')
+
+    def _parse_array_subscript(self, dref: str) -> Tuple[str, Optional[int]]:
+        """
+        Parse a dataref name for array subscript notation.
+
+        Args:
+            dref: Dataref name, possibly with subscript like "dref[0]"
+
+        Returns:
+            Tuple of (base_name, index) where index is None if no subscript
+        """
+        match = self._ARRAY_SUBSCRIPT_RE.match(dref)
+        if match:
+            return match.group(1), int(match.group(2))
+        return dref, None
+
     def send_dataref(self, dref: str, value: float) -> None:
         """Set a dataref using XPC sendDREF."""
         if not self._client:
@@ -159,17 +178,78 @@ class XPCBackend(XPlaneBackend):
         except Exception as e:
             print(f"Failed to send DREF {dref}: {e}")
 
-    def send_datarefs(self, drefs: Dict[str, float]) -> None:
-        """Set multiple datarefs using XPC sendDREFs."""
+    def send_array_dataref(self, dref: str, values: List[float]) -> None:
+        """
+        Set an array dataref with a list of values.
+
+        Args:
+            dref: Base dataref name (without subscript)
+            values: List of values to set for each array index
+        """
         if not self._client:
             return
 
         try:
-            dref_list = list(drefs.keys())
-            value_list = list(drefs.values())
-            self._client.sendDREFs(dref_list, value_list)
+            self._client.sendDREF(dref, values)
         except Exception as e:
-            print(f"Failed to send DREFs: {e}")
+            print(f"Failed to send array DREF {dref}: {e}")
+
+    def send_datarefs(self, drefs: Dict[str, float]) -> None:
+        """
+        Set multiple datarefs, handling array subscripts properly.
+
+        X-Plane's XPLMFindDataRef() does NOT accept subscript notation like
+        "dataref[0]". For array datarefs, we must:
+        1. Parse out the subscript from the name
+        2. Group values by base dataref name
+        3. Send array datarefs as arrays to the base name
+
+        Args:
+            drefs: Dict mapping dataref names (possibly with subscripts) to values
+        """
+        if not self._client:
+            return
+
+        # Separate scalar datarefs from array datarefs
+        scalar_drefs: Dict[str, float] = {}
+        array_drefs: Dict[str, Dict[int, float]] = {}  # base_name -> {index: value}
+
+        for dref, value in drefs.items():
+            base_name, index = self._parse_array_subscript(dref)
+            if index is not None:
+                # This is an array dataref with subscript
+                if base_name not in array_drefs:
+                    array_drefs[base_name] = {}
+                array_drefs[base_name][index] = value
+            else:
+                # Scalar dataref
+                scalar_drefs[dref] = value
+
+        # Send scalar datarefs using sendDREFs (batch send)
+        if scalar_drefs:
+            try:
+                dref_list = list(scalar_drefs.keys())
+                value_list = list(scalar_drefs.values())
+                self._client.sendDREFs(dref_list, value_list)
+            except Exception as e:
+                print(f"Failed to send scalar DREFs: {e}")
+
+        # Send array datarefs one at a time with proper array values
+        for base_name, index_values in array_drefs.items():
+            try:
+                # Determine array size (use max index + 1, minimum 8 for X-Plane engines)
+                max_index = max(index_values.keys())
+                array_size = max(8, max_index + 1)
+
+                # Build array with zeros for unset indices
+                values = [0.0] * array_size
+                for idx, val in index_values.items():
+                    values[idx] = val
+
+                # Send the full array
+                self._client.sendDREF(base_name, values)
+            except Exception as e:
+                print(f"Failed to send array DREF {base_name}: {e}")
 
     def get_position(self) -> Optional[AircraftState]:
         """Get current aircraft position using XPC getPOSI."""

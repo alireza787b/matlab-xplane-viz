@@ -817,7 +817,7 @@ class XPlanePlayer:
 
             # DEBUG: Print all datarefs being sent on first frame
             if frame_idx == 0 and drefs:
-                print(f"[DEBUG] Sending {len(drefs)} propulsion datarefs:")
+                print(f"[DEBUG] Sending {len(drefs)} propulsion datarefs (array subscripts handled by backend):")
                 for dref, val in drefs.items():
                     print(f"  {dref} = {val}")
 

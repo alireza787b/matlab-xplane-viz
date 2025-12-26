@@ -109,7 +109,7 @@ variable_mapping:
       target_unit: "degrees"
       index: 1  # X-Plane uses index 1 for left motor
       invert_convention: false
-      offset: -90.0  # -90° = forward flight (you confirmed this works manually)
+      offset: 0.0  # No offset: 0° in mat = 0° in XP (forward flight)
       inverted: false
 
     tilt_right:
@@ -118,7 +118,7 @@ variable_mapping:
       target_unit: "degrees"
       index: 0  # X-Plane uses index 0 for right motor
       invert_convention: false
-      offset: -90.0  # -90° = forward flight (you confirmed this works manually)
+      offset: 0.0  # No offset: 0° in mat = 0° in XP (forward flight)
       inverted: false
 
 # Common X-Plane Datarefs Reference
