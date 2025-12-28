@@ -265,7 +265,8 @@ class XPlanePlayer:
 
     def __init__(self, config: Optional[PlaybackConfig] = None,
                  config_path: Optional[Union[str, Path]] = None,
-                 verbose: bool = False):
+                 verbose: bool = False,
+                 debug: bool = False):
         """
         Initialize the X-Plane player.
 
@@ -273,6 +274,7 @@ class XPlanePlayer:
             config: PlaybackConfig object
             config_path: Path to YAML configuration file
             verbose: Enable verbose debug logging
+            debug: Enable detailed debug mode with dataref verification
         """
         if config_path:
             self.config = PlaybackConfig.from_yaml(config_path)
@@ -285,6 +287,8 @@ class XPlanePlayer:
         self._flight_data: Optional[FlightData] = None
         self._converter: Optional[NEDConverter] = None
         self._verbose = verbose
+        self._debug = debug  # Detailed debug mode
+        self._debug_interval = 30  # Debug output every N frames
         self._frame_log_interval = 100  # Log every N frames when verbose
 
         self._state = PlaybackState.STOPPED
@@ -382,6 +386,73 @@ class XPlanePlayer:
         if self._backend:
             self._backend.disconnect()
             self._backend = None
+
+    def _debug_read_prop_state(self) -> Dict[str, Any]:
+        """
+        Read current prop/engine state from X-Plane for debugging.
+
+        Returns dict with current values of key datarefs.
+        """
+        if not self._backend:
+            return {}
+
+        state = {}
+        # Array datarefs - read full array to see engine 0 and 1
+        drefs_to_read = [
+            ("sim/flightmodel2/engines/prop_disc/override", True),  # Array - prop override status
+            ("sim/flightmodel2/engines/prop_disc/prop_is_disc", True),  # Array - disc mode
+            ("sim/flightmodel2/engines/prop_rotation_angle_deg", True),  # Array
+            ("sim/flightmodel/engine/ENGN_running", True),  # Array
+            ("sim/flightmodel/engine/ENGN_thro", True),  # Array
+            ("sim/flightmodel/engine/ENGN_N1_", True),  # Array
+            ("sim/aircraft/prop/acf_vertcant", True),  # Array
+            ("sim/flightmodel/engine/POINT_tacrad", True),  # Prop rotation speed array
+        ]
+
+        for dref, as_array in drefs_to_read:
+            try:
+                # Try to get with as_array parameter if backend supports it
+                if hasattr(self._backend, 'get_dataref'):
+                    import inspect
+                    sig = inspect.signature(self._backend.get_dataref)
+                    if 'as_array' in sig.parameters:
+                        val = self._backend.get_dataref(dref, as_array=as_array)
+                    else:
+                        val = self._backend.get_dataref(dref)
+                else:
+                    val = self._backend.get_dataref(dref)
+
+                # Format array values nicely (show first 4 elements)
+                if isinstance(val, (list, tuple)) and len(val) > 4:
+                    val = f"[{val[0]:.2f}, {val[1]:.2f}, {val[2]:.2f}, {val[3]:.2f}, ...]"
+                elif isinstance(val, (list, tuple)):
+                    val = [round(v, 2) for v in val]
+
+                state[dref] = val
+            except Exception as e:
+                state[dref] = f"ERROR: {e}"
+
+        return state
+
+    def _debug_print_prop_state(self, frame_idx: int, sent_drefs: Dict[str, float]) -> None:
+        """Print detailed debug info about prop state."""
+        print(f"\n{'='*60}")
+        print(f"[DEBUG] Frame {frame_idx} - Prop/Engine State")
+        print(f"{'='*60}")
+
+        print("\n--- SENT to X-Plane ---")
+        for dref, val in sorted(sent_drefs.items()):
+            print(f"  {dref} = {val:.4f}")
+
+        print("\n--- READ BACK from X-Plane ---")
+        state = self._debug_read_prop_state()
+        for dref, val in state.items():
+            if val is not None:
+                print(f"  {dref} = {val}")
+            else:
+                print(f"  {dref} = None (not readable or not set)")
+
+        print(f"{'='*60}\n")
 
     def load(self, source: Union[str, Path, FlightData]) -> bool:
         """
@@ -499,6 +570,40 @@ class XPlanePlayer:
         # Enable physics override to prevent X-Plane fighting our commands
         if self._backend:
             self._backend.override_physics(True)
+
+        # Debug: Print X-Plane aircraft configuration at start
+        if self._debug and self._backend:
+            print("\n" + "="*60)
+            print("[DEBUG] X-Plane Aircraft Configuration at Playback Start")
+            print("="*60)
+            # (dref, description, is_array)
+            acf_drefs = [
+                ("sim/aircraft/view/acf_tailnum", "Tail Number", False),
+                ("sim/aircraft/engine/acf_num_engines", "Number of Engines", False),
+                ("sim/aircraft/prop/acf_num_blades", "Blades per Prop", True),
+                ("sim/aircraft/prop/acf_vertcant", "Prop Vertical Cant [0,1]", True),
+                ("sim/flightmodel2/engines/prop_rotation_angle_deg", "Prop Rotation [0,1]", True),
+                ("sim/flightmodel/engine/ENGN_running", "Engine Running [0,1]", True),
+                ("sim/flightmodel/engine/ENGN_thro", "Throttle [0,1]", True),
+                ("sim/flightmodel/engine/ENGN_N1_", "Engine N1 [0,1]", True),
+            ]
+            for dref, desc, is_array in acf_drefs:
+                try:
+                    import inspect
+                    sig = inspect.signature(self._backend.get_dataref)
+                    if 'as_array' in sig.parameters:
+                        val = self._backend.get_dataref(dref, as_array=is_array)
+                    else:
+                        val = self._backend.get_dataref(dref)
+                    # Format array to show first 2 elements
+                    if isinstance(val, (list, tuple)) and len(val) > 2:
+                        val = f"[{val[0]:.2f}, {val[1]:.2f}, ...]"
+                    elif isinstance(val, (list, tuple)):
+                        val = [round(v, 2) for v in val]
+                    print(f"  {desc}: {val}")
+                except Exception as e:
+                    print(f"  {desc}: ERROR - {e}")
+            print("="*60 + "\n")
 
         # Reset prop rotation angles for smooth animation from start
         self._prop_angles = [0.0] * 8
@@ -737,6 +842,12 @@ class XPlanePlayer:
                 n1_pct = (rpm_value / cfg.max_value) * 100
                 drefs[f"sim/flightmodel/engine/ENGN_N1_[{xp_idx}]"] = n1_pct
 
+                # Enable prop disc override - REQUIRED for manual prop animation!
+                # Without this, X-Plane manages the prop disc and ignores our angle writes
+                drefs[f"sim/flightmodel2/engines/prop_disc/override[{xp_idx}]"] = 1
+                # Force BLADE mode (not disc) - T-Tail uses PlaneMaker blades, not OBJ disc
+                drefs[f"sim/flightmodel2/engines/prop_disc/prop_is_disc[{xp_idx}]"] = 0
+
                 # Manually set prop rotation angle - REQUIRED when physics are overridden
                 # X-Plane cannot auto-animate props when VEHX/sendPOSI disables physics.
                 # Use wall-clock time for smooth, continuous rotation (avoids sampling aliasing)
@@ -759,6 +870,11 @@ class XPlanePlayer:
                 # Set N1 percentage (engine speed indicator)
                 n1_pct = (rpm_value / cfg.max_value) * 100
                 drefs[f"sim/flightmodel/engine/ENGN_N1_[{xp_idx}]"] = n1_pct
+
+                # Enable prop disc override - REQUIRED for manual prop animation!
+                drefs[f"sim/flightmodel2/engines/prop_disc/override[{xp_idx}]"] = 1
+                # Force BLADE mode (not disc) - T-Tail uses PlaneMaker blades, not OBJ disc
+                drefs[f"sim/flightmodel2/engines/prop_disc/prop_is_disc[{xp_idx}]"] = 0
 
                 # Manually set prop rotation angle - REQUIRED when physics are overridden
                 degrees_per_second = rpm_value * 6.0
@@ -813,14 +929,17 @@ class XPlanePlayer:
 
             # DEBUG: Print all datarefs being sent on first frame
             if frame_idx == 0 and drefs:
-                print(f"[DEBUG] Sending {len(drefs)} propulsion datarefs:")
+                print(f"\n[DEBUG] Sending {len(drefs)} propulsion datarefs:")
                 print(f"  (Array subscripts are grouped and sent properly by backend)")
                 for dref, val in drefs.items():
                     print(f"  {dref} = {val}")
-                print(f"  Note: Props animate naturally via ENGN_running/thro/N1 - no manual override")
 
             if drefs:
                 backend.send_datarefs(drefs)
+
+                # Enhanced debug: Read back values every N frames
+                if self._debug and (frame_idx == 0 or frame_idx % self._debug_interval == 0):
+                    self._debug_print_prop_state(frame_idx, drefs)
 
     def on_frame(self, callback: Callable[[int, float], None]) -> None:
         """

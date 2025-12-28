@@ -272,14 +272,25 @@ class XPCBackend(XPlaneBackend):
             print(f"Failed to get position: {e}")
             return None
 
-    def get_dataref(self, dref: str) -> Optional[float]:
-        """Get a dataref value using XPC getDREF."""
+    def get_dataref(self, dref: str, as_array: bool = False) -> Optional[Union[float, List[float]]]:
+        """
+        Get a dataref value using XPC getDREF.
+
+        Args:
+            dref: Dataref name
+            as_array: If True, return full array; if False, return first element
+
+        Returns:
+            Single float value, list of floats, or None on error
+        """
         if not self._client:
             return None
 
         try:
             result = self._client.getDREF(dref)
             if result and len(result) > 0:
+                if as_array:
+                    return list(result)
                 return result[0]
             return None
         except Exception as e:
