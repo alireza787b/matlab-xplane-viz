@@ -1,0 +1,69 @@
+# Quadcopter Configuration Example
+# For aircraft like: DJI-style quadcopters, research UAVs
+#
+# Copy this file to config/data_mapping.yaml and customize for your data
+
+# Variable name mapping
+position:
+  north: "N"
+  east: "E"
+  down: "D"
+
+attitude:
+  roll: "phi"
+  pitch: "theta"
+  yaw: "psi"
+
+# Quadcopters typically don't have traditional control surfaces
+# These can be mapped to virtual/mixer outputs if available
+controls:
+  aileron: "roll_cmd"      # Or leave empty if not applicable
+  elevator: "pitch_cmd"
+  rudder: "yaw_cmd"
+
+# Propulsion configuration for quadcopter (4 motors)
+propulsion:
+  type: "quadcopter"
+
+  units:
+    - name: "front_left"
+      rpm_var: "motor1_rpm"   # Front-left motor RPM
+      engine_index: 0
+      rpm_max: 15000          # Typical for small quadcopter motors
+
+    - name: "front_right"
+      rpm_var: "motor2_rpm"
+      engine_index: 1
+      rpm_max: 15000
+
+    - name: "rear_left"
+      rpm_var: "motor3_rpm"
+      engine_index: 2
+      rpm_max: 15000
+
+    - name: "rear_right"
+      rpm_var: "motor4_rpm"
+      engine_index: 3
+      rpm_max: 15000
+
+# For hexacopter or octocopter, add more units with appropriate indices
+
+# Unit specifications
+units:
+  position: "meters"
+  attitude: "radians"
+  controls: "radians"
+  propulsion_rpm: "rpm"
+
+time:
+  duration: "Time"
+  sample_rate: "output_hz"
+
+# Flight mode detection - could be based on altitude rate or commands
+flight_modes:
+  enabled: false
+  # Optionally enable for hover/forward flight detection:
+  # enabled: true
+  # type: "speed_based"
+  # thresholds:
+  #   hover_max_speed: 2.0  # m/s

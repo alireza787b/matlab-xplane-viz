@@ -1,0 +1,60 @@
+# Multi-Engine Configuration Example
+# For aircraft like: Boeing 737, King Air, twin-engine jets/turboprops
+#
+# Copy this file to config/data_mapping.yaml and customize for your data
+
+# Variable name mapping
+position:
+  north: "N"
+  east: "E"
+  down: "D"
+
+attitude:
+  roll: "phi"
+  pitch: "theta"
+  yaw: "psi"
+
+controls:
+  aileron: "delta_a"
+  elevator: "delta_e"
+  rudder: "delta_r"
+
+# Propulsion configuration for twin-engine
+propulsion:
+  type: "multi_engine"
+
+  units:
+    - name: "left_engine"
+      rpm_var: "N1_left"        # Left engine N1 percentage or RPM
+      throttle_var: "thr_left"  # Optional: throttle position
+      engine_index: 0           # X-Plane engine index
+      rpm_max: 100              # If using N1%, max is 100
+
+    - name: "right_engine"
+      rpm_var: "N1_right"       # Right engine N1 percentage or RPM
+      throttle_var: "thr_right"
+      engine_index: 1
+      rpm_max: 100
+
+# For 4-engine aircraft (e.g., 747), add more units:
+#   - name: "left_inner"
+#     rpm_var: "N1_li"
+#     engine_index: 1
+#   - name: "right_inner"
+#     rpm_var: "N1_ri"
+#     engine_index: 2
+
+# Unit specifications
+units:
+  position: "meters"
+  attitude: "radians"
+  controls: "radians"
+  propulsion_rpm: "percent"   # If using N1 percentage
+
+time:
+  duration: "Time"
+  sample_rate: "output_hz"
+
+# Flight mode detection disabled for conventional aircraft
+flight_modes:
+  enabled: false

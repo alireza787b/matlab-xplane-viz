@@ -1,0 +1,62 @@
+# VTOL Tiltrotor Configuration Example
+# For aircraft like: Alia-250, V-22 Osprey style tiltrotors
+#
+# Copy this file to config/data_mapping.yaml and customize for your data
+
+# Variable name mapping - map YOUR .mat file variable names
+position:
+  north: "N"        # Your variable for North position (meters)
+  east: "E"         # Your variable for East position (meters)
+  down: "D"         # Your variable for Down position (meters, positive down)
+
+attitude:
+  roll: "phi"       # Roll angle (radians, positive right wing down)
+  pitch: "theta"    # Pitch angle (radians, positive nose up)
+  yaw: "psi"        # Yaw/heading angle (radians, positive clockwise from north)
+
+controls:
+  aileron: "delta_a"    # Aileron deflection (radians)
+  elevator: "delta_e"   # Elevator deflection (radians)
+  rudder: "delta_r"     # Rudder deflection (radians)
+
+# Propulsion configuration for VTOL tiltrotor
+propulsion:
+  type: "vtol_tiltrotor"
+
+  units:
+    - name: "left"
+      rpm_var: "RPM_Cl"       # Left motor RPM variable name
+      tilt_var: "theta_Cl"    # Left motor tilt angle variable name
+      engine_index: 1          # X-Plane engine index (may need adjustment per aircraft)
+      rpm_max: 10000           # Maximum RPM for scaling (adjust to your aircraft)
+
+    - name: "right"
+      rpm_var: "RPM_Cr"       # Right motor RPM variable name
+      tilt_var: "theta_Cr"    # Right motor tilt angle variable name
+      engine_index: 0          # X-Plane engine index
+      rpm_max: 10000
+
+# Unit specifications
+units:
+  position: "meters"      # or "feet" - will convert to meters
+  attitude: "radians"     # or "degrees" - will convert to radians
+  controls: "radians"     # or "degrees"
+  propulsion_tilt: "radians"  # Tilt angle units
+  propulsion_rpm: "rpm"   # RPM units
+
+# Time information
+time:
+  duration: "Time"        # Total simulation time variable name
+  sample_rate: "output_hz"  # Sample rate variable name (Hz)
+
+# Flight mode detection (VTOL-specific)
+flight_modes:
+  enabled: true
+  type: "tilt_based"
+  thresholds:
+    cruise_max_tilt: 10   # Tilt angles below this = cruise mode (degrees)
+    hover_min_tilt: 80    # Tilt angles above this = hover mode (degrees)
+  labels:
+    cruise: "CRUISE"
+    hover: "HOVER"
+    transition: "TRANSITION"

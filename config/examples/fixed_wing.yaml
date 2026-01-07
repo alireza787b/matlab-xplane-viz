@@ -1,0 +1,47 @@
+# Fixed-Wing Single Engine Configuration Example
+# For aircraft like: Cessna 172, Piper Cherokee, GA aircraft
+#
+# Copy this file to config/data_mapping.yaml and customize for your data
+
+# Variable name mapping
+position:
+  north: "N"
+  east: "E"
+  down: "D"
+
+attitude:
+  roll: "phi"
+  pitch: "theta"
+  yaw: "psi"
+
+controls:
+  aileron: "delta_a"
+  elevator: "delta_e"
+  rudder: "delta_r"
+
+# Propulsion configuration for single-engine fixed-wing
+propulsion:
+  type: "fixed_wing"
+
+  units:
+    - name: "main"
+      rpm_var: "engine_rpm"     # Single engine RPM variable
+      throttle_var: "throttle"  # Optional: throttle position (0-1)
+      engine_index: 0           # X-Plane engine index
+      rpm_max: 2700             # Typical for GA piston engines
+      # No tilt_var - fixed-wing doesn't have tilting props
+
+# Unit specifications
+units:
+  position: "meters"
+  attitude: "radians"
+  controls: "radians"
+  propulsion_rpm: "rpm"
+
+time:
+  duration: "Time"
+  sample_rate: "output_hz"
+
+# Flight mode detection disabled for fixed-wing
+flight_modes:
+  enabled: false
