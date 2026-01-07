@@ -22,7 +22,7 @@ class DashboardPlotter(BasePlotter):
     def plot_dashboard(self) -> plt.Figure:
         """Create comprehensive dashboard with all key flight data."""
         fig = plt.figure(figsize=self.style.get_figure_size('dashboard'))
-        fig.suptitle('VTOL Flight Simulation Dashboard',
+        fig.suptitle('Flight Simulation Dashboard',
                      fontsize=self.style.title_size + 4, fontweight='bold', y=0.98)
 
         # Create grid layout

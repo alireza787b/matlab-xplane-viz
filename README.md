@@ -1,11 +1,21 @@
-# VTOL Flight Simulation Visualization
+# Flight Data Visualization & X-Plane Playback
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Professional-grade Python visualization system for VTOL (Vertical Take-Off and Landing) aircraft flight simulation data. Designed to process MATLAB/Simulink simulation outputs and generate publication-quality plots, 3D visualizations, animations, and real-time X-Plane playback.
+Professional-grade Python system for flight simulation data visualization and X-Plane playback. Works with **any aircraft type** - fixed-wing, multi-engine, VTOL, quadcopter, or custom configurations. Designed to process MATLAB/Simulink simulation outputs and generate publication-quality plots, 3D visualizations, animations, and real-time X-Plane playback.
 
 ![Dashboard Example](docs/images/dashboard_preview.png)
+
+## Supported Aircraft Types
+
+| Type | Description | Example Config |
+|------|-------------|----------------|
+| **Fixed-Wing** | Single/multi-engine conventional | `config/examples/fixed_wing.yaml` |
+| **VTOL Tiltrotor** | Tilt-rotor aircraft with RPM + tilt angles | `config/examples/vtol_tiltrotor.yaml` |
+| **Multi-Engine** | Twin-engine jets, turboprops | `config/examples/multi_engine.yaml` |
+| **Multirotor** | Quadcopters, hexacopters | `config/examples/quadcopter.yaml` |
+| **Custom** | Any propulsion configuration | Define your own mapping |
 
 ## Features
 
@@ -121,8 +131,8 @@ The system expects MATLAB `.mat` files with the following variables (default map
 | `N`, `E`, `D` | Position (NED frame) | meters |
 | `phi`, `theta`, `psi` | Euler angles (roll, pitch, yaw) | radians |
 | `delta_a`, `delta_e`, `delta_r` | Control surfaces (aileron, elevator, rudder) | radians |
-| `RPM_Cl`, `RPM_Cr` | Cruise propeller RPM | RPM |
-| `theta_Cl`, `theta_Cr` | Propeller tilt angles | degrees |
+| `RPM_*` | Propeller/motor RPM (configurable per engine) | RPM |
+| `theta_*` | Propeller tilt angles (VTOL only) | degrees |
 | `Time` | Simulation duration | seconds |
 | `output_hz` | Sample rate | Hz |
 
@@ -296,6 +306,24 @@ Map **any** .mat file variables to **any** X-Plane datarefs - no code changes ne
 
 See [Custom Aircraft Guide](docs/guides/custom-aircraft.md) for complete examples.
 
+## Known Limitations
+
+### X-Plane Physics Override
+
+When playing back flight data, the tool uses **physics override mode** which tells X-Plane to accept position/attitude from the playback instead of calculating it.
+
+**Effects:**
+- Throttle/RPM cockpit gauges may not respond during playback
+- Engine sounds may not match actual RPM values
+- Props animate via manual angle calculation, not physics simulation
+
+**Workarounds:**
+- Aircraft ACF file can have idle RPM configured for visual prop rotation
+- Position/attitude playback works correctly
+- Control surfaces animate correctly
+
+See [Known Issues Guide](docs/guides/known-issues.md) for details and possible solutions.
+
 ## Future Roadmap
 
 - [x] **X-Plane Integration**: Real-time visualization via UDP protocol
@@ -329,6 +357,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Acknowledgments
 
-- VTOL simulation data provided by flight dynamics research project
-- Inspired by MATLAB/Simulink aerospace visualization tools
-- Built for professional flight simulation analysis
+- Flight simulation data format compatible with MATLAB/Simulink outputs
+- Inspired by aerospace visualization tools and flight test analysis workflows
+- Built for professional flight simulation analysis and research

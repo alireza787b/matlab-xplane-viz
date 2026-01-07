@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-VTOL Flight Simulation Analysis - Main Entry Point
+Flight Simulation Analysis - Main Entry Point
 
 Usage:
     python run_analysis.py --session session_001
@@ -196,7 +196,7 @@ def generate_all_plots(
     generated_files = {}
 
     print("\n" + "=" * 60)
-    print("VTOL Flight Simulation Analysis")
+    print("Flight Simulation Analysis")
     print("=" * 60)
     print(f"Source: {flight_data.source_file}")
     print(f"Duration: {flight_data.duration}s @ {flight_data.sample_rate}Hz")
@@ -342,7 +342,7 @@ def generate_all_plots(
 
 def main():
     parser = argparse.ArgumentParser(
-        description='VTOL Flight Simulation Analysis',
+        description='Flight Simulation Analysis and Visualization',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
