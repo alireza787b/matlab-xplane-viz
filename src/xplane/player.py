@@ -814,17 +814,17 @@ class XPlanePlayer:
             drefs = {}
             sample_rate = data.sample_rate
 
-            # DEBUG: Print propulsion status on first frame
-            if frame_idx == 0:
-                print(f"\n[DEBUG] Propulsion config:")
-                print(f"  rpm_left config: {dref_cfg.rpm_left}")
-                print(f"  rpm_right config: {dref_cfg.rpm_right}")
-                print(f"  tilt_left config: {dref_cfg.tilt_left}")
-                print(f"  tilt_right config: {dref_cfg.tilt_right}")
-                print(f"  RPM_Cl length: {len(data.RPM_Cl) if data.RPM_Cl is not None else 'None'}")
-                print(f"  RPM_Cr length: {len(data.RPM_Cr) if data.RPM_Cr is not None else 'None'}")
-                print(f"  theta_Cl length: {len(data.theta_Cl) if data.theta_Cl is not None else 'None'}")
-                print(f"  theta_Cr length: {len(data.theta_Cr) if data.theta_Cr is not None else 'None'}")
+            # Debug: Print propulsion status on first frame (only if verbose)
+            if self._verbose and frame_idx == 0:
+                print(f"\n[Propulsion Config]")
+                print(f"  rpm_left: {dref_cfg.rpm_left}")
+                print(f"  rpm_right: {dref_cfg.rpm_right}")
+                print(f"  tilt_left: {dref_cfg.tilt_left}")
+                print(f"  tilt_right: {dref_cfg.tilt_right}")
+                print(f"  RPM_Cl samples: {len(data.RPM_Cl) if data.RPM_Cl is not None else 'None'}")
+                print(f"  RPM_Cr samples: {len(data.RPM_Cr) if data.RPM_Cr is not None else 'None'}")
+                print(f"  theta_Cl samples: {len(data.theta_Cl) if data.theta_Cl is not None else 'None'}")
+                print(f"  theta_Cr samples: {len(data.theta_Cr) if data.theta_Cr is not None else 'None'}")
 
             # Note: Engine indices are SWAPPED in X-Plane (0=right, 1=left)
             # Left RPM -> X-Plane engine index 1
@@ -900,9 +900,9 @@ class XPlanePlayer:
                 if cfg.index is not None and '[' not in target:
                     target = f"{target}[{cfg.index}]"
                 drefs[target] = value
-                # DEBUG: Print tilt value on first frame
-                if frame_idx == 0:
-                    print(f"[DEBUG] Tilt LEFT: raw={math.degrees(data.theta_Cl[0]):.1f}°, offset={cfg.offset}, final={value:.1f}° -> {target}")
+                # Debug: Print tilt value on first frame (only if verbose)
+                if self._verbose and frame_idx == 0:
+                    print(f"  Tilt LEFT: raw={math.degrees(data.theta_Cl[0]):.1f}°, offset={cfg.offset}, final={value:.1f}° -> {target}")
 
             # Right tilt angle - use config for target dref and unit conversion
             if dref_cfg.tilt_right and len(data.theta_Cr) > 0:
@@ -923,14 +923,13 @@ class XPlanePlayer:
                 if cfg.index is not None and '[' not in target:
                     target = f"{target}[{cfg.index}]"
                 drefs[target] = value
-                # DEBUG: Print tilt value on first frame
-                if frame_idx == 0:
-                    print(f"[DEBUG] Tilt RIGHT: raw={math.degrees(data.theta_Cr[0]):.1f}°, offset={cfg.offset}, final={value:.1f}° -> {target}")
+                # Debug: Print tilt value on first frame (only if verbose)
+                if self._verbose and frame_idx == 0:
+                    print(f"  Tilt RIGHT: raw={math.degrees(data.theta_Cr[0]):.1f}°, offset={cfg.offset}, final={value:.1f}° -> {target}")
 
-            # DEBUG: Print all datarefs being sent on first frame
-            if frame_idx == 0 and drefs:
-                print(f"\n[DEBUG] Sending {len(drefs)} propulsion datarefs:")
-                print(f"  (Array subscripts are grouped and sent properly by backend)")
+            # Debug: Print all datarefs being sent on first frame (only if verbose)
+            if self._verbose and frame_idx == 0 and drefs:
+                print(f"\n[Sending {len(drefs)} propulsion datarefs]")
                 for dref, val in drefs.items():
                     print(f"  {dref} = {val}")
 
